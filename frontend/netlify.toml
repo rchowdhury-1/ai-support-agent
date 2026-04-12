@@ -4,6 +4,12 @@
   publish = "dist"
 
 [[redirects]]
+  from = "/widget.js"
+  to = "/widget.js"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
