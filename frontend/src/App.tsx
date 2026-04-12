@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthContext, useAuthState } from './hooks/useAuth';
+import { AuthContext, useAuth, useAuthState } from './hooks/useAuth';
 
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -13,7 +13,7 @@ import ConversationDetailPage from './pages/ConversationDetailPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuthState();
+  const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -24,7 +24,7 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={auth}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Toaster
           position="top-right"
           toastOptions={{

@@ -1,11 +1,11 @@
 (function () {
   'use strict';
 
-  const API_URL = 'http://localhost:5000';
   const STORAGE_KEY_PREFIX = 'supportai_session_';
 
   const script = document.currentScript || document.querySelector('script[data-agent-id]');
   const AGENT_ID = script ? script.getAttribute('data-agent-id') : null;
+  const API_URL = (script ? script.getAttribute('data-api-url') : null) || 'http://localhost:5001';
 
   if (!AGENT_ID) {
     console.error('[SupportAI] data-agent-id attribute is required');

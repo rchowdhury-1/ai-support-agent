@@ -1,13 +1,13 @@
 # SupportAI — AI Customer Support Platform
 
-A full-stack SaaS platform where businesses sign up, configure an AI support agent, and embed a chat widget on their website. The AI uses Claude (claude-sonnet-4-20250514) to answer customer questions.
+A full-stack SaaS platform where businesses sign up, configure an AI support agent, and embed a chat widget on their website. The AI uses Google Gemini (`gemini-2.0-flash`) to answer customer questions.
 
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Tailwind CSS + Vite
 - **Backend**: Node.js + Express + TypeScript
 - **Database**: PostgreSQL (Supabase)
-- **AI**: Anthropic Claude API (`claude-sonnet-4-20250514`)
+- **AI**: Google Gemini API (`gemini-2.0-flash`)
 - **Auth**: JWT + httpOnly cookie refresh tokens
 - **Email**: Resend
 - **Deploy**: Netlify (frontend) + Render (backend)
@@ -21,7 +21,7 @@ ai-support-agent/
 │   │   ├── db/       # Pool + migrations
 │   │   ├── middleware/  # JWT auth
 │   │   ├── routes/   # auth, agents, chat, conversations, dashboard
-│   │   ├── services/ # Claude API wrapper
+│   │   ├── services/ # Gemini API wrapper
 │   │   └── index.ts  # App entry point
 │   ├── .env.example
 │   └── package.json
@@ -63,7 +63,7 @@ npm run dev           # Starts on http://localhost:5000
 DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
 REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=AIza...
 CLIENT_URL=http://localhost:5173
 PORT=5000
 NODE_ENV=development
@@ -171,7 +171,7 @@ After deploying the frontend, update `API_URL` in `widget/widget.js` to point to
 Every chat message:
 1. Loads full conversation history from PostgreSQL
 2. Builds messages array with history
-3. Sends to `claude-sonnet-4-20250514` with the agent's custom system prompt
+3. Sends to `gemini-2.0-flash` with the agent's custom system prompt
 4. Saves user message + AI response to DB
 5. Returns AI response to widget
 

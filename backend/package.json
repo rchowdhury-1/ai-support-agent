@@ -9,7 +9,7 @@
     "migrate": "node --loader ts-node/esm src/db/migrate.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.3",
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

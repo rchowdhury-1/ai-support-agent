@@ -61,7 +61,7 @@ export default function ChatWidget({
           ...prev,
           {
             role: 'assistant',
-            content: "Thanks for your question! This is a demo. In the real version, I'm powered by Claude AI and can answer questions specific to your business.",
+            content: "Thanks for your question! This is a demo. In the real version, I'm powered by Gemini AI and can answer questions specific to your business.",
           },
         ]);
       } else if (sessionId) {

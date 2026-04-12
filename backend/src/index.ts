@@ -21,28 +21,34 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+].filter(Boolean) as string[];
+
 app.use(cors({
   origin: (origin, callback) => {
-    const allowed = [process.env.CLIENT_URL, 'http://localhost:5173', 'http://localhost:3000'];
-    if (!origin || allowed.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true);
-    }
+    // Allow requests with no origin (mobile apps, curl, widget fetches)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
 }));
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: isDev ? 2000 : 200,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: isDev ? 300 : 30,
   standardHeaders: true,
   legacyHeaders: false,
 });
