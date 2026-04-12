@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -28,7 +28,8 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    // Don't retry refresh endpoint itself — avoids infinite loop
+    if (error.response?.status === 401 && !original._retry && !original.url?.includes('/auth/')) {
       original._retry = true;
       try {
         const res = await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
@@ -38,7 +39,6 @@ api.interceptors.response.use(
         return api(original);
       } catch {
         setAccessToken(null);
-        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

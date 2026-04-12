@@ -32,7 +32,7 @@ export default function LandingPage() {
       <section className="max-w-6xl mx-auto px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 bg-indigo-950 border border-indigo-800 rounded-full px-4 py-1.5 text-sm text-indigo-300 mb-8">
           <Zap className="w-3.5 h-3.5" />
-          Powered by Claude AI
+          Powered by Gemini AI
         </div>
         <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-6 leading-tight">
           Add AI support to your<br />
@@ -151,7 +151,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 px-6 text-center">
-        <p className="text-gray-500 text-sm">© 2025 SupportAI. Built with Claude by Anthropic.</p>
+        <p className="text-gray-500 text-sm">© 2025 SupportAI. Built with Gemini by Google.</p>
       </footer>
 
       {/* Live demo widget */}
