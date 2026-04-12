@@ -1,27 +1,26 @@
 import { Link } from 'react-router-dom';
-import { Zap, MessageSquare, BarChart3, Code2, Check } from 'lucide-react';
+import { Zap, MessageSquare, BarChart3, Code2, Check, ArrowRight, Sparkles } from 'lucide-react';
 import ChatWidget from '../components/ui/ChatWidget';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       {/* Nav */}
-      <nav className="border-b border-gray-800 px-6 py-4">
+      <nav className="sticky top-0 z-40 border-b px-6 py-4 backdrop-blur-md" style={{ borderColor: 'var(--border)', background: 'rgba(3,7,18,0.8)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
               <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-white text-xl">SupportAI</span>
+            <span className="font-bold text-white text-lg tracking-tight">SupportAI</span>
           </div>
-          <div className="flex items-center gap-4">
-            <Link to="/login" className="text-gray-400 hover:text-white text-sm font-medium transition-colors">
+          <div className="flex items-center gap-3">
+            <Link to="/login" className="text-sm font-medium transition-colors" style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
               Sign In
             </Link>
-            <Link
-              to="/register"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
+            <Link to="/register" className="btn-primary text-sm px-4 py-2">
               Get Started Free
             </Link>
           </div>
@@ -29,72 +28,92 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 py-24 text-center">
-        <div className="inline-flex items-center gap-2 bg-indigo-950 border border-indigo-800 rounded-full px-4 py-1.5 text-sm text-indigo-300 mb-8">
-          <Zap className="w-3.5 h-3.5" />
-          Powered by Gemini AI
+      <section className="relative overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 hero-grid" />
+        <div className="absolute inset-0" style={{
+          background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139,92,246,0.25) 0%, transparent 70%)',
+        }} />
+        <div className="absolute inset-0" style={{
+          background: 'radial-gradient(ellipse 40% 40% at 80% 60%, rgba(6,182,212,0.1) 0%, transparent 60%)',
+        }} />
+
+        <div className="relative max-w-6xl mx-auto px-6 py-28 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-8 border"
+            style={{ background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: 'var(--primary-light)' }}>
+            <Sparkles className="w-3.5 h-3.5" />
+            Powered by Gemini AI
+          </div>
+
+          <h1 className="text-6xl sm:text-7xl font-extrabold text-white mb-6 leading-[1.05] tracking-tight">
+            AI support that feels<br />
+            <span className="gradient-text">like magic</span>
+          </h1>
+
+          <p className="text-xl leading-relaxed max-w-2xl mx-auto mb-10" style={{ color: 'var(--text-muted)' }}>
+            Deploy an AI support agent on any website in under 5 minutes. Powered by Gemini, trained on your business, live 24/7.
+          </p>
+
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            <Link to="/register" className="btn-primary text-base px-8 py-3.5">
+              Start for free <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link to="/login" className="btn-ghost text-base px-8 py-3.5">
+              Sign in
+            </Link>
+          </div>
+          <p className="text-sm mt-4" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
+            No credit card · 100 messages free
+          </p>
         </div>
-        <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-6 leading-tight">
-          Add AI support to your<br />
-          <span className="text-indigo-400">website in 5 minutes</span>
-        </h1>
-        <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-          Give your customers instant answers 24/7. SupportAI embeds directly into any website — no code required. Powered by Claude, trained on your business.
-        </p>
-        <div className="flex items-center justify-center gap-4">
-          <Link
-            to="/register"
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg"
-          >
-            Start for free
-          </Link>
-          <Link
-            to="/login"
-            className="border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg"
-          >
-            Sign in
-          </Link>
-        </div>
-        <p className="text-gray-500 text-sm mt-4">No credit card required · 100 messages free</p>
       </section>
 
       {/* Features */}
-      <section className="max-w-6xl mx-auto px-6 py-16">
-        <h2 className="text-3xl font-bold text-white text-center mb-12">Everything you need</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <div className="text-center mb-14">
+          <h2 className="text-3xl font-bold text-white mb-3">Built for modern teams</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Everything you need to deploy AI support at scale</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {[
             {
               icon: MessageSquare,
               title: 'Custom AI Persona',
-              desc: 'Train your AI with a custom system prompt. Make it sound like your brand, know your products, and follow your support policies.',
+              desc: 'Train your AI with a custom system prompt. Make it sound like your brand and know your products inside out.',
+              accent: 'var(--primary)',
             },
             {
               icon: BarChart3,
-              title: 'Conversation History',
+              title: 'Full Conversation History',
               desc: 'Every conversation is saved. Browse, filter, and review all customer interactions from your dashboard.',
+              accent: 'var(--accent)',
             },
             {
               icon: Code2,
               title: 'One-Line Embed',
-              desc: 'Paste a single script tag into any website — Webflow, Shopify, WordPress, or custom HTML. Works everywhere.',
+              desc: 'Paste a single script tag into any website. Works on Webflow, Shopify, WordPress, and raw HTML.',
+              accent: 'var(--primary-light)',
             },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-              <div className="w-12 h-12 bg-indigo-950 rounded-xl flex items-center justify-center mb-4">
-                <Icon className="w-6 h-6 text-indigo-400" />
+          ].map(({ icon: Icon, title, desc, accent }) => (
+            <div key={title} className="card p-6 group">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-all duration-300"
+                style={{ background: `${accent}18`, border: `1px solid ${accent}30` }}>
+                <Icon className="w-5 h-5" style={{ color: accent }} />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
+              <h3 className="text-base font-semibold text-white mb-2">{title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="max-w-6xl mx-auto px-6 py-16">
-        <h2 className="text-3xl font-bold text-white text-center mb-4">Simple pricing</h2>
-        <p className="text-gray-400 text-center mb-12">Start free, upgrade when you're ready</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <div className="text-center mb-14">
+          <h2 className="text-3xl font-bold text-white mb-3">Simple pricing</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Start free, upgrade when you're ready</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl mx-auto">
           {[
             {
               name: 'Free',
@@ -115,32 +134,38 @@ export default function LandingPage() {
           ].map((plan) => (
             <div
               key={plan.name}
-              className={`rounded-2xl p-8 border ${
-                plan.highlight
-                  ? 'bg-indigo-600 border-indigo-500'
-                  : 'bg-gray-900 border-gray-800'
-              }`}
+              className="card p-8 relative overflow-hidden"
+              style={plan.highlight ? {
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(6,182,212,0.08))',
+                borderColor: 'rgba(139,92,246,0.4)',
+                boxShadow: '0 0 40px rgba(139,92,246,0.15)',
+              } : {}}
             >
-              <h3 className="text-lg font-semibold text-white mb-1">{plan.name}</h3>
+              {plan.highlight && (
+                <div className="absolute top-4 right-4 text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: 'var(--primary)', color: 'white' }}>
+                  Popular
+                </div>
+              )}
+              <h3 className="text-base font-semibold text-white mb-1">{plan.name}</h3>
               <div className="flex items-baseline gap-1 mb-6">
                 <span className="text-4xl font-extrabold text-white">{plan.price}</span>
-                <span className={plan.highlight ? 'text-indigo-200' : 'text-gray-400'}>{plan.period}</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-sm">{plan.period}</span>
               </div>
               <ul className="space-y-3 mb-8">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm">
-                    <Check className={`w-4 h-4 ${plan.highlight ? 'text-indigo-200' : 'text-indigo-400'}`} />
-                    <span className={plan.highlight ? 'text-indigo-100' : 'text-gray-300'}>{f}</span>
+                  <li key={f} className="flex items-center gap-2.5 text-sm">
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: plan.highlight ? 'rgba(139,92,246,0.2)' : 'rgba(6,182,212,0.15)' }}>
+                      <Check className="w-2.5 h-2.5" style={{ color: plan.highlight ? 'var(--primary-light)' : 'var(--accent)' }} />
+                    </div>
+                    <span style={{ color: plan.highlight ? 'var(--text)' : 'var(--text-muted)' }}>{f}</span>
                   </li>
                 ))}
               </ul>
               <Link
                 to="/register"
-                className={`block text-center font-semibold py-3 rounded-xl transition-colors ${
-                  plan.highlight
-                    ? 'bg-white text-indigo-600 hover:bg-indigo-50'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                }`}
+                className={plan.highlight ? 'btn-primary w-full justify-center text-sm' : 'btn-ghost w-full justify-center text-sm'}
               >
                 {plan.cta}
               </Link>
@@ -150,12 +175,19 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-8 px-6 text-center">
-        <p className="text-gray-500 text-sm">© 2025 SupportAI. Built with Gemini by Google.</p>
+      <footer className="border-t py-8 px-6 text-center" style={{ borderColor: 'var(--border)' }}>
+        <p className="text-sm" style={{ color: 'var(--text-muted)', opacity: 0.5 }}>
+          © 2025 SupportAI. Built with Gemini by Google.
+        </p>
       </footer>
 
       {/* Live demo widget */}
-      <ChatWidget demoMode color="#6366f1" agentName="SupportAI Demo" welcomeMessage="Hi! I'm a demo of SupportAI. Try asking me anything!" />
+      <ChatWidget
+        demoMode
+        color="var(--primary)"
+        agentName="SupportAI Demo"
+        welcomeMessage="Hi! I'm a demo of SupportAI. Try asking me anything!"
+      />
     </div>
   );
 }

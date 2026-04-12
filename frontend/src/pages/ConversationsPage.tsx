@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Filter } from 'lucide-react';
+import { MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { api } from '../lib/api';
 import { Conversation } from '../types';
 import clsx from 'clsx';
 
 type StatusFilter = 'all' | 'open' | 'closed' | 'escalated';
 
-const statusColors: Record<string, string> = {
-  open: 'bg-green-900 text-green-300',
-  closed: 'bg-gray-800 text-gray-400',
-  escalated: 'bg-yellow-900 text-yellow-300',
+const statusClass: Record<string, string> = {
+  open: 'status-open',
+  closed: 'status-closed',
+  escalated: 'status-escalated',
 };
 
 export default function ConversationsPage() {
@@ -32,19 +32,20 @@ export default function ConversationsPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Conversations</h1>
-          <p className="text-gray-400 mt-1">All customer support conversations</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>All customer support conversations</p>
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <div className="flex bg-gray-900 border border-gray-800 rounded-lg p-1 gap-1">
+          <SlidersHorizontal className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+          <div className="flex rounded-xl p-1 gap-1" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             {(['all', 'open', 'closed', 'escalated'] as StatusFilter[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setFilter(s)}
-                className={clsx(
-                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize',
-                  filter === s ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
-                )}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 capitalize"
+                style={filter === s
+                  ? { background: 'var(--primary)', color: 'white' }
+                  : { color: 'var(--text-muted)', background: 'transparent' }
+                }
               >
                 {s}
               </button>
@@ -53,48 +54,56 @@ export default function ConversationsPage() {
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
           </div>
         ) : conversations.length === 0 ? (
           <div className="p-16 text-center">
-            <MessageSquare className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-500">No conversations found</p>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid var(--border)' }}>
+              <MessageSquare className="w-5 h-5" style={{ color: 'var(--primary-light)' }} />
+            </div>
+            <p className="text-sm font-medium text-white mb-1">No conversations found</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Try changing the status filter</p>
           </div>
         ) : (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-6 py-3">Visitor</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-6 py-3">Agent</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-6 py-3">Messages</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-6 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-6 py-3">Date</th>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Visitor', 'Agent', 'Messages', 'Status', 'Date'].map((h) => (
+                  <th key={h} className="text-left text-xs font-medium uppercase tracking-wider px-6 py-3" style={{ color: 'var(--text-muted)' }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody>
               {conversations.map((conv) => (
-                <tr key={conv.id} className="hover:bg-gray-800/50 transition-colors">
+                <tr key={conv.id} className="transition-all duration-150" style={{ borderBottom: '1px solid var(--border)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.04)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-6 py-4">
                     <Link to={`/dashboard/conversations/${conv.id}`} className="block">
-                      <p className="text-sm font-medium text-white hover:text-indigo-300 transition-colors">
+                      <p className="text-sm font-medium text-white transition-colors"
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--primary-light)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'white')}>
                         {conv.visitor_name ?? 'Anonymous'}
                       </p>
                       {conv.visitor_email && (
-                        <p className="text-xs text-gray-500 mt-0.5">{conv.visitor_email}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{conv.visitor_email}</p>
                       )}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-400">{conv.agent_name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-400">{conv.message_count}</td>
+                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{conv.agent_name}</td>
+                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{conv.message_count}</td>
                   <td className="px-6 py-4">
-                    <span className={clsx('px-2.5 py-0.5 rounded-full text-xs font-medium capitalize', statusColors[conv.status])}>
+                    <span className={clsx('px-2.5 py-0.5 rounded-full text-xs font-medium capitalize', statusClass[conv.status])}>
                       {conv.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>
                     {new Date(conv.created_at).toLocaleDateString()}
                   </td>
                 </tr>
