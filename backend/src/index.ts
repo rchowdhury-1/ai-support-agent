@@ -16,6 +16,21 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Allow all origins for public chat routes (widget can be embedded anywhere)
+app.use('/chat', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}));
+
+// Handle preflight for chat routes
+app.options('/chat/*', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
+
 app.use(cors({
   origin: [
     process.env.CLIENT_URL || '',
