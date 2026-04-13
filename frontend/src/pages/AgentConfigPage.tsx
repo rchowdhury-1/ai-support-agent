@@ -13,7 +13,12 @@ export default function AgentConfigPage() {
   const [form, setForm] = useState({ name: '', system_prompt: '', welcome_message: '', color: '#8b5cf6' });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [embedCode, setEmbedCode] = useState('');
+
+  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+  const apiUrl = import.meta.env.VITE_API_URL || '';
+  const embedCode = id
+    ? `<script src="${appUrl}/widget.js" data-agent-id="${id}" data-api-url="${apiUrl}" defer></script>`
+    : '';
 
   useEffect(() => {
     if (!id) return;
@@ -26,7 +31,6 @@ export default function AgentConfigPage() {
       })
       .catch(() => navigate('/dashboard/agents'))
       .finally(() => setLoading(false));
-    api.get(`/agents/${id}/embed`).then((res) => setEmbedCode(res.data.embedCode)).catch(() => {});
   }, [id, navigate]);
 
   const handleSave = async () => {
