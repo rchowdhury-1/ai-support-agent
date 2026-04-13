@@ -6,7 +6,7 @@ type Message = { role: 'user' | 'assistant'; content: string };
 
 export async function callClaude(systemPrompt: string, messages: Message[]): Promise<string> {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt,
   });
 
