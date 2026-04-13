@@ -1,27 +1,21 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
 export async function callClaude(systemPrompt: string, messages: Message[]): Promise<string> {
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    systemInstruction: systemPrompt,
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ],
+    max_tokens: 1024,
+    temperature: 0.7,
   });
 
-  // Gemini uses 'model' for assistant role
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const lastMessage = messages[messages.length - 1];
-
-  const chat = model.startChat({ history });
-  const result = await chat.sendMessage(lastMessage.content);
-  const text = result.response.text();
-
-  if (!text) throw new Error('No text response from Gemini');
+  const text = completion.choices[0]?.message?.content;
+  if (!text) throw new Error('No response from Groq');
   return text;
 }
