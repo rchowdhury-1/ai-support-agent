@@ -5,6 +5,7 @@ import { z } from 'zod';
 import pool from '../db/pool.js';
 
 const router = Router();
+const isProd = process.env.NODE_ENV === 'production';
 
 const registerSchema = z.object({
   name: z.string().min(2).max(100),
@@ -59,8 +60,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -110,8 +111,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
