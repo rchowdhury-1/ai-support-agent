@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { api, setAccessToken } from '../lib/api';
+import { api, setAccessToken, setRefreshToken, getRefreshToken } from '../lib/api';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -23,30 +23,41 @@ export function useAuthState(): AuthContextType {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.post('/auth/refresh')
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      setLoading(false);
+      return;
+    }
+    api.post('/auth/refresh', { refreshToken })
       .then((res) => {
         setAccessToken(res.data.accessToken);
         setUser(res.data.user);
       })
-      .catch(() => {})
+      .catch(() => {
+        setRefreshToken(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/auth/login', { email, password });
     setAccessToken(res.data.accessToken);
+    setRefreshToken(res.data.refreshToken);
     setUser(res.data.user);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const res = await api.post('/auth/register', { name, email, password });
     setAccessToken(res.data.accessToken);
+    setRefreshToken(res.data.refreshToken);
     setUser(res.data.user);
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
+    const refreshToken = getRefreshToken();
+    await api.post('/auth/logout', { refreshToken });
     setAccessToken(null);
+    setRefreshToken(null);
     setUser(null);
   };
 

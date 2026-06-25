@@ -17,6 +17,18 @@ export function getAccessToken() {
   return accessToken;
 }
 
+export function setRefreshToken(token: string | null) {
+  if (token) {
+    localStorage.setItem('refreshToken', token);
+  } else {
+    localStorage.removeItem('refreshToken');
+  }
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem('refreshToken');
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
@@ -31,14 +43,18 @@ api.interceptors.response.use(
     // Don't retry refresh endpoint itself — avoids infinite loop
     if (error.response?.status === 401 && !original._retry && !original.url?.includes('/auth/')) {
       original._retry = true;
-      try {
-        const res = await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
-        const newToken = res.data.accessToken;
-        setAccessToken(newToken);
-        original.headers.Authorization = `Bearer ${newToken}`;
-        return api(original);
-      } catch {
-        setAccessToken(null);
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+          const newToken = res.data.accessToken;
+          setAccessToken(newToken);
+          original.headers.Authorization = `Bearer ${newToken}`;
+          return api(original);
+        } catch {
+          setAccessToken(null);
+          setRefreshToken(null);
+        }
       }
     }
     return Promise.reject(error);

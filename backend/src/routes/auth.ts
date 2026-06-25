@@ -58,14 +58,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       [refreshToken, user.id, expiresAt]
     );
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.status(201).json({ user, accessToken });
+    res.status(201).json({ user, accessToken, refreshToken });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -109,15 +102,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       [refreshToken, user.id, expiresAt]
     );
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
     const { password_hash: _, ...safeUser } = user;
-    res.json({ user: safeUser, accessToken });
+    res.json({ user: safeUser, accessToken, refreshToken });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -125,7 +111,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 });
 
 router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
-  const token = req.cookies?.refreshToken;
+  const token = req.body?.refreshToken || req.cookies?.refreshToken;
 
   if (!token) {
     res.status(401).json({ error: 'No refresh token' });
@@ -164,7 +150,7 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
 });
 
 router.post('/logout', async (req: Request, res: Response): Promise<void> => {
-  const token = req.cookies?.refreshToken;
+  const token = req.body?.refreshToken || req.cookies?.refreshToken;
 
   if (token) {
     await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [token]);
