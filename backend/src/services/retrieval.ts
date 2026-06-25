@@ -3,7 +3,7 @@ import { embedQuery } from './embeddings.js';
 import { toSql } from 'pgvector';
 
 const TOP_K = 5;
-const SIMILARITY_THRESHOLD = 0.72;
+const SIMILARITY_THRESHOLD = 0.25;
 
 export interface RetrievedChunk {
   content: string;

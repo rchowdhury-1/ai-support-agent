@@ -3,7 +3,8 @@ import Stripe from 'stripe';
 import pool from '../db/pool.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '2026-06-24.dahlia' });
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-06-24.dahlia' }) : null;
 
 const PRICE_TO_PLAN: Record<string, string> = {
   [process.env.STRIPE_STARTER_PRICE_ID || '']: 'starter',
@@ -13,8 +14,17 @@ const PRICE_TO_PLAN: Record<string, string> = {
 
 const router = Router();
 
+function requireStripe(_req: Request, res: Response): boolean {
+  if (!stripe) {
+    res.status(503).json({ error: 'Billing is not configured' });
+    return false;
+  }
+  return true;
+}
+
 // Create checkout session (protected)
 router.post('/checkout', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!requireStripe(req, res)) return;
   try {
     const { priceId } = req.body;
     if (!priceId) {
@@ -27,12 +37,12 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response): 
 
     let customerId = user.stripe_customer_id;
     if (!customerId) {
-      const customer = await stripe.customers.create({ email: user.email });
+      const customer = await stripe!.customers.create({ email: user.email });
       customerId = customer.id;
       await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, req.userId]);
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripe!.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -58,7 +68,7 @@ router.get('/subscription', authenticate, async (req: AuthRequest, res: Response
     const user = userResult.rows[0];
 
     let subscription = null;
-    if (user.stripe_subscription_id) {
+    if (user.stripe_subscription_id && stripe) {
       try {
         subscription = await stripe.subscriptions.retrieve(user.stripe_subscription_id);
       } catch {
@@ -83,6 +93,7 @@ router.get('/subscription', authenticate, async (req: AuthRequest, res: Response
 
 // Create customer portal session (protected)
 router.post('/portal', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!requireStripe(req, res)) return;
   try {
     const userResult = await pool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.userId]);
     const customerId = userResult.rows[0]?.stripe_customer_id;
@@ -92,7 +103,7 @@ router.post('/portal', authenticate, async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await stripe!.billingPortal.sessions.create({
       customer: customerId,
       return_url: `${process.env.CLIENT_URL}/dashboard`,
     });
@@ -106,11 +117,12 @@ router.post('/portal', authenticate, async (req: AuthRequest, res: Response): Pr
 
 // Stripe webhook (public, verified by signature)
 router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
+  if (!requireStripe(req, res)) return;
   const sig = req.headers['stripe-signature'] as string;
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '');
+    event = stripe!.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '');
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
     res.status(400).json({ error: 'Invalid signature' });
@@ -125,7 +137,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         const customerId = session.customer as string;
 
         // Get subscription to find the price/plan
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
         const priceId = subscription.items.data[0]?.price.id;
         const plan = PRICE_TO_PLAN[priceId] || 'starter';
 
