@@ -115,6 +115,18 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
       if (hasDocuments) {
         // Agent has docs but nothing matched — no-match fallback
         systemPrompt += `\n\nIMPORTANT: The customer's question was not found in your knowledge base. You must NOT answer from general knowledge. Instead, politely tell the customer you don't have information about that in your knowledge base, and offer to capture their question so the team can follow up. Ask for their name and email if not already provided.`;
+
+        // Auto-create a lead from the unanswered question
+        const convData = await pool.query(
+          'SELECT visitor_name, visitor_email FROM conversations WHERE id = $1',
+          [conv.id]
+        );
+        const visitor = convData.rows[0];
+        await pool.query(
+          `INSERT INTO leads (agent_id, conversation_id, visitor_name, visitor_email, question)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [conv.agent_id, conv.id, visitor.visitor_name, visitor.visitor_email, content]
+        );
       }
       // If no documents uploaded, use the agent's system prompt as-is (original behavior)
     }

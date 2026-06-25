@@ -15,7 +15,9 @@ router.get('/stats', async (req: AuthRequest, res: Response): Promise<void> => {
         (SELECT COUNT(*) FROM messages m
           JOIN conversations c ON c.id = m.conversation_id
           JOIN agents a ON a.id = c.agent_id
-          WHERE a.user_id = $1 AND DATE(m.created_at) = CURRENT_DATE) as messages_today`,
+          WHERE a.user_id = $1 AND DATE(m.created_at) = CURRENT_DATE) as messages_today,
+        (SELECT COUNT(*) FROM leads l JOIN agents a ON a.id = l.agent_id WHERE a.user_id = $1) as leads_count,
+        (SELECT COUNT(*) FROM knowledge_documents kd JOIN agents a ON a.id = kd.agent_id WHERE a.user_id = $1 AND kd.status = 'ready') as documents_count`,
       [req.userId]
     );
 
