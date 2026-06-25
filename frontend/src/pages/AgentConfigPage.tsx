@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Code2, Loader2, Copy } from 'lucide-react';
+import { ArrowLeft, Save, Code2, Loader2, Copy, Upload, FileText, Trash2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api } from '../lib/api';
-import { Agent } from '../types';
+import { Agent, KnowledgeDocument } from '../types';
 import ChatWidget from '../components/ui/ChatWidget';
 import toast from 'react-hot-toast';
 
@@ -13,12 +13,20 @@ export default function AgentConfigPage() {
   const [form, setForm] = useState({ name: '', system_prompt: '', welcome_message: '', color: '#8b5cf6' });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
   const apiUrl = import.meta.env.VITE_API_URL || '';
   const embedCode = id
     ? `<script src="${appUrl}/widget.js" data-agent-id="${id}" data-api-url="${apiUrl}" defer></script>`
     : '';
+
+  const loadDocuments = () => {
+    if (!id) return;
+    api.get(`/knowledge/${id}`).then((res) => setDocuments(res.data)).catch(console.error);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -31,7 +39,47 @@ export default function AgentConfigPage() {
       })
       .catch(() => navigate('/dashboard/agents'))
       .finally(() => setLoading(false));
+    loadDocuments();
   }, [id, navigate]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      await api.post(`/knowledge/${id}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Document uploaded — processing...');
+      loadDocuments();
+      // Poll for processing completion
+      const poll = setInterval(() => {
+        api.get(`/knowledge/${id}`).then((res) => {
+          setDocuments(res.data);
+          const stillProcessing = res.data.some((d: KnowledgeDocument) => d.status === 'processing');
+          if (!stillProcessing) clearInterval(poll);
+        });
+      }, 3000);
+      setTimeout(() => clearInterval(poll), 120000); // Stop polling after 2 min
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (docId: string) => {
+    try {
+      await api.delete(`/knowledge/${id}/${docId}`);
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      toast.success('Document deleted');
+    } catch {
+      toast.error('Failed to delete document');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -108,6 +156,80 @@ export default function AgentConfigPage() {
               style={{ fontFamily: 'inherit' }}
             />
             <p className="text-xs mt-2" style={{ color: 'rgba(156,163,175,0.4)' }}>{form.system_prompt.length} / 5000</p>
+          </div>
+
+          {/* Knowledge Base */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="font-semibold text-white">Knowledge Base</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Upload docs so your agent answers from your content</p>
+              </div>
+              <label className="btn-primary text-sm cursor-pointer flex items-center gap-1.5">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Upload
+                <input ref={fileInputRef} type="file" accept=".txt,.md" onChange={handleUpload} className="hidden" disabled={uploading} />
+              </label>
+            </div>
+
+            {documents.length === 0 ? (
+              <div className="py-8 text-center rounded-xl" style={{ background: 'var(--bg)', border: '1px dashed var(--border)' }}>
+                <FileText className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No documents uploaded yet</p>
+                <p className="text-xs mt-1" style={{ color: 'rgba(156,163,175,0.4)' }}>Supports .txt and .md files (max 5MB)</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <FileText className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--primary-light)' }} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{doc.filename}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {(doc.file_size / 1024).toFixed(1)}KB
+                          {doc.status === 'ready' && ` · ${doc.chunk_count} chunks`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {doc.status === 'processing' && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing
+                        </span>
+                      )}
+                      {doc.status === 'ready' && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: '#4ade80' }}>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                        </span>
+                      )}
+                      {doc.status === 'error' && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--error)' }} title={doc.error_message || ''}>
+                          <AlertCircle className="w-3.5 h-3.5" /> Error
+                          <button
+                            onClick={() => handleDeleteDoc(doc.id)}
+                            className="ml-1 p-1 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Delete and re-upload"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleDeleteDoc(doc.id)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: 'var(--text-muted)' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--error)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {embedCode && (
