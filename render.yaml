@@ -16,7 +16,7 @@ services:
         sync: false
       - key: REFRESH_SECRET
         sync: false
-      - key: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: CLIENT_URL
         sync: false

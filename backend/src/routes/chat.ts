@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import pool from '../db/pool.js';
-import { callClaude } from '../services/claude.js';
+import { generateResponse } from '../services/openai.js';
 
 const router = Router();
 
@@ -100,7 +100,7 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
       { role: 'user' as const, content },
     ];
 
-    const aiResponse = await callClaude(conv.system_prompt, messages);
+    const aiResponse = await generateResponse(conv.system_prompt, messages);
 
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',

@@ -13,7 +13,7 @@ import dashboardRoutes from './routes/dashboard.js';
 
 dotenv.config();
 
-const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_SECRET', 'DATABASE_URL', 'GROQ_API_KEY'];
+const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_SECRET', 'DATABASE_URL', 'OPENAI_API_KEY'];
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missing.length > 0) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
