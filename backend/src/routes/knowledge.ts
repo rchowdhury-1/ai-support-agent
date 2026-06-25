@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { chunkText } from '../services/chunker.js';
 import { embedTexts } from '../services/embeddings.js';
 import { toSql } from 'pgvector';
+import { checkDocumentLimit } from '../middleware/planLimits.js';
 
 const router = Router();
 router.use(authenticate);
@@ -55,7 +56,7 @@ router.get('/:agentId', async (req: AuthRequest, res: Response): Promise<void> =
 });
 
 // Upload a document
-router.post('/:agentId/upload', upload.single('file'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:agentId/upload', checkDocumentLimit(), upload.single('file'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!await verifyAgentOwnership(req.params.agentId, req.userId!)) {
       res.status(404).json({ error: 'Agent not found' });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import pool from '../db/pool.js';
 import { generateResponse } from '../services/openai.js';
 import { retrieveChunks, buildContextBlock } from '../services/retrieval.js';
+import { checkMessageLimit } from '../middleware/planLimits.js';
 
 const router = Router();
 
@@ -83,6 +84,13 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
     }
 
     const conv = convResult.rows[0];
+
+    // Check message limit for the agent's owner
+    const messageLimitCheck = await checkMessageLimit()(conv.agent_id);
+    if (!messageLimitCheck.allowed) {
+      res.status(429).json({ error: messageLimitCheck.message });
+      return;
+    }
 
     const historyResult = await pool.query(
       'SELECT role, content FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',

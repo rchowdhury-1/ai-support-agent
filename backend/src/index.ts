@@ -12,6 +12,7 @@ import conversationsRoutes from './routes/conversations.js';
 import dashboardRoutes from './routes/dashboard.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import leadsRoutes from './routes/leads.js';
+import billingRoutes from './routes/billing.js';
 
 dotenv.config();
 
@@ -72,6 +73,9 @@ const chatLimiter = rateLimit({
 });
 
 app.use(limiter);
+
+// Stripe webhook needs raw body for signature verification — must come before express.json()
+app.use('/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
@@ -82,6 +86,7 @@ app.use('/conversations', conversationsRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/knowledge', knowledgeRoutes);
 app.use('/leads', leadsRoutes);
+app.use('/billing', billingRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
