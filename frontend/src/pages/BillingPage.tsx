@@ -66,8 +66,9 @@ export default function BillingPage() {
     try {
       const res = await api.post('/billing/checkout', { priceId });
       window.location.href = res.data.url;
-    } catch {
-      toast.error('Failed to start checkout');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Failed to start checkout';
+      toast.error(msg);
       setCheckoutLoading(null);
     }
   };
