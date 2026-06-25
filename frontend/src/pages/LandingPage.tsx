@@ -193,7 +193,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-8 px-6 text-center" style={{ borderColor: 'var(--border)' }}>
         <p className="text-sm" style={{ color: 'var(--text-muted)', opacity: 0.5 }}>
-          © 2025 SupportAI. Built with OpenAI.
+          © 2026 SupportAI. Built with OpenAI.
         </p>
       </footer>
 
