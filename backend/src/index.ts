@@ -10,6 +10,7 @@ import agentsRoutes from './routes/agents.js';
 import chatRoutes from './routes/chat.js';
 import conversationsRoutes from './routes/conversations.js';
 import dashboardRoutes from './routes/dashboard.js';
+import knowledgeRoutes from './routes/knowledge.js';
 
 dotenv.config();
 
@@ -78,6 +79,7 @@ app.use('/agents', agentsRoutes);
 app.use('/chat', chatLimiter, chatRoutes);
 app.use('/conversations', conversationsRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/knowledge', knowledgeRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

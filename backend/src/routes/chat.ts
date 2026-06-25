@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import pool from '../db/pool.js';
 import { generateResponse } from '../services/openai.js';
+import { retrieveChunks, buildContextBlock } from '../services/retrieval.js';
 
 const router = Router();
 
@@ -95,12 +96,35 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
       [conv.id, 'user', content]
     );
 
+    // RAG: retrieve relevant chunks from the agent's knowledge base
+    const chunks = await retrieveChunks(conv.agent_id, content);
+    const contextBlock = buildContextBlock(chunks);
+
+    // Build system prompt with RAG context
+    let systemPrompt = conv.system_prompt;
+    if (contextBlock) {
+      systemPrompt += `\n\nAnswer ONLY using the context below. If the context does not contain the answer, say you don't have that information in your knowledge base and offer to pass the question to the team.${contextBlock}`;
+    } else {
+      // Check if the agent has any documents at all
+      const docCheck = await pool.query(
+        `SELECT COUNT(*) as count FROM knowledge_documents WHERE agent_id = $1 AND status = 'ready'`,
+        [conv.agent_id]
+      );
+      const hasDocuments = parseInt(docCheck.rows[0].count) > 0;
+
+      if (hasDocuments) {
+        // Agent has docs but nothing matched — no-match fallback
+        systemPrompt += `\n\nIMPORTANT: The customer's question was not found in your knowledge base. You must NOT answer from general knowledge. Instead, politely tell the customer you don't have information about that in your knowledge base, and offer to capture their question so the team can follow up. Ask for their name and email if not already provided.`;
+      }
+      // If no documents uploaded, use the agent's system prompt as-is (original behavior)
+    }
+
     const messages = [
       ...history.map((m: { role: string; content: string }) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content },
     ];
 
-    const aiResponse = await generateResponse(conv.system_prompt, messages);
+    const aiResponse = await generateResponse(systemPrompt, messages);
 
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
