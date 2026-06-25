@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import pool from '../db/pool.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { checkAgentLimit } from '../middleware/planLimits.js';
 
 const router = Router();
 router.use(authenticate);
@@ -32,7 +33,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   }
 });
 
-router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/', checkAgentLimit(), async (req: AuthRequest, res: Response): Promise<void> => {
   const result = agentSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.errors[0].message });

@@ -42,7 +42,7 @@ export default function LandingPage() {
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-8 border"
             style={{ background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: 'var(--primary-light)' }}>
             <Sparkles className="w-3.5 h-3.5" />
-            Powered by Gemini AI
+            Powered by OpenAI
           </div>
 
           <h1 className="text-6xl sm:text-7xl font-extrabold text-white mb-6 leading-[1.05] tracking-tight">
@@ -51,7 +51,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-xl leading-relaxed max-w-2xl mx-auto mb-10" style={{ color: 'var(--text-muted)' }}>
-            Deploy an AI support agent on any website in under 5 minutes. Powered by Gemini, trained on your business, live 24/7.
+            Deploy an AI support agent on any website in under 5 minutes. Powered by OpenAI, trained on your docs, live 24/7.
           </p>
 
           <div className="flex items-center justify-center gap-4 flex-wrap">
@@ -113,23 +113,39 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-white mb-3">Simple pricing</h2>
           <p style={{ color: 'var(--text-muted)' }}>Start free, upgrade when you're ready</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
           {[
             {
               name: 'Free',
-              price: '$0',
+              price: '£0',
               period: '/month',
-              features: ['100 messages/month', '1 AI agent', 'Conversation history', 'Embeddable widget', 'Email support'],
+              features: ['1 agent', '2 docs per agent', '100 messages/month', 'Chat widget', 'Conversation history'],
               cta: 'Get started free',
               highlight: false,
             },
             {
-              name: 'Pro',
-              price: '$29',
+              name: 'Starter',
+              price: '£29',
               period: '/month',
-              features: ['Unlimited messages', 'Unlimited agents', 'Full conversation history', 'Priority support', 'Custom branding', 'Advanced analytics'],
-              cta: 'Start Pro trial',
+              features: ['3 agents', '10 docs per agent', '1,000 messages/month', 'Lead capture', 'Priority support'],
+              cta: 'Start Starter',
+              highlight: false,
+            },
+            {
+              name: 'Pro',
+              price: '£79',
+              period: '/month',
+              features: ['10 agents', '50 docs per agent', '10,000 messages/month', 'Lead capture', 'Priority support'],
+              cta: 'Start Pro',
               highlight: true,
+            },
+            {
+              name: 'Business',
+              price: '£199',
+              period: '/month',
+              features: ['Unlimited agents', 'Unlimited docs', '100,000 messages/month', 'Lead capture', 'Dedicated support'],
+              cta: 'Contact us',
+              highlight: false,
             },
           ].map((plan) => (
             <div
@@ -177,7 +193,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-8 px-6 text-center" style={{ borderColor: 'var(--border)' }}>
         <p className="text-sm" style={{ color: 'var(--text-muted)', opacity: 0.5 }}>
-          © 2025 SupportAI. Built with Gemini by Google.
+          © 2025 SupportAI. Built with OpenAI.
         </p>
       </footer>
 

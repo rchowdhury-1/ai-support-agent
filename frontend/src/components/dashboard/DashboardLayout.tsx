@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bot, MessageSquare, LogOut, Zap } from 'lucide-react';
+import { LayoutDashboard, Bot, MessageSquare, UserPlus, CreditCard, LogOut, Zap } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,8 @@ export default function DashboardLayout() {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
     { to: '/dashboard/agents', icon: Bot, label: 'Agents' },
     { to: '/dashboard/conversations', icon: MessageSquare, label: 'Conversations' },
+    { to: '/dashboard/leads', icon: UserPlus, label: 'Leads' },
+    { to: '/dashboard/billing', icon: CreditCard, label: 'Billing' },
   ];
 
   return (

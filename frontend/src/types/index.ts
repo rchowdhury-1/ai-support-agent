@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  plan: 'free' | 'pro';
+  plan: 'free' | 'starter' | 'pro' | 'business';
   created_at: string;
 }
 
@@ -43,4 +43,34 @@ export interface DashboardStats {
   total_conversations: string;
   open_conversations: string;
   messages_today: string;
+  leads_count: string;
+  documents_count: string;
+}
+
+export interface Lead {
+  id: string;
+  agent_id: string;
+  conversation_id: string | null;
+  visitor_name: string | null;
+  visitor_email: string | null;
+  question: string;
+  status: 'new' | 'contacted' | 'closed';
+  created_at: string;
+  agent_name?: string;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  agent_id: string;
+  filename: string;
+  file_size: number;
+  chunk_count: number;
+  status: 'processing' | 'ready' | 'error';
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Plan {
+  name: 'free' | 'starter' | 'pro' | 'business';
 }

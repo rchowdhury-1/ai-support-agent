@@ -1,13 +1,13 @@
 # SupportAI — AI Customer Support Platform
 
-A full-stack SaaS platform where businesses sign up, configure an AI support agent, and embed a chat widget on their website. The AI uses Google Gemini (`gemini-2.0-flash`) to answer customer questions.
+A full-stack SaaS platform where businesses sign up, configure an AI support agent, and embed a chat widget on their website. The AI uses OpenAI (`gpt-4o-mini`) for answer generation and RAG-powered retrieval from uploaded knowledge-base documents.
 
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Tailwind CSS + Vite
 - **Backend**: Node.js + Express + TypeScript
 - **Database**: PostgreSQL (Supabase)
-- **AI**: Google Gemini API (`gemini-2.0-flash`)
+- **AI**: OpenAI API (`gpt-4o-mini` generation + `text-embedding-3-small` embeddings)
 - **Auth**: JWT + httpOnly cookie refresh tokens
 - **Email**: Resend
 - **Deploy**: Netlify (frontend) + Render (backend)
@@ -21,7 +21,7 @@ ai-support-agent/
 │   │   ├── db/       # Pool + migrations
 │   │   ├── middleware/  # JWT auth
 │   │   ├── routes/   # auth, agents, chat, conversations, dashboard
-│   │   ├── services/ # Gemini API wrapper
+│   │   ├── services/ # OpenAI API wrapper
 │   │   └── index.ts  # App entry point
 │   ├── .env.example
 │   └── package.json
@@ -63,7 +63,7 @@ npm run dev           # Starts on http://localhost:5000
 DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
 REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
-GEMINI_API_KEY=AIza...
+OPENAI_API_KEY=sk-...
 CLIENT_URL=http://localhost:5173
 PORT=5000
 NODE_ENV=development
@@ -122,7 +122,7 @@ npm run migrate
 
 ### Chat (public — used by widget)
 - `POST /chat/start` — Start conversation, returns sessionId
-- `POST /chat/message` — Send message, calls Claude, returns response
+- `POST /chat/message` — Send message, calls OpenAI, returns response
 - `GET /chat/:sessionId/history` — Load conversation history
 
 ### Conversations (requires Bearer token)
@@ -144,7 +144,7 @@ Paste this into any website's `<body>`:
 - Self-contained, no external dependencies
 - Persists session across page refreshes via localStorage
 - Mobile responsive
-- Typing indicator while Claude responds
+- Typing indicator while AI responds
 - Loads conversation history on return visits
 
 ## Deployment
@@ -166,13 +166,14 @@ Paste this into any website's `<body>`:
 ### Widget
 After deploying the frontend, update `API_URL` in `widget/widget.js` to point to your production backend URL.
 
-## Claude Integration
+## AI Integration
 
 Every chat message:
 1. Loads full conversation history from PostgreSQL
-2. Builds messages array with history
-3. Sends to `gemini-2.0-flash` with the agent's custom system prompt
-4. Saves user message + AI response to DB
-5. Returns AI response to widget
+2. Embeds the query and retrieves relevant knowledge-base chunks via pgvector
+3. Builds messages array with history + retrieved context
+4. Sends to OpenAI `gpt-4o-mini` with the agent's custom system prompt
+5. Saves user message + AI response to DB
+6. Returns AI response to widget
 
-The system prompt is fully customizable per agent, letting businesses define their AI's persona, knowledge, and behavior.
+The system prompt is fully customizable per agent, letting businesses define their AI's persona, knowledge, and behavior. When the knowledge base doesn't cover a question, the agent gracefully declines and offers to capture the question as a lead.

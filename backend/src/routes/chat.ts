@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import pool from '../db/pool.js';
-import { callClaude } from '../services/claude.js';
+import { generateResponse } from '../services/openai.js';
+import { retrieveChunks, buildContextBlock } from '../services/retrieval.js';
+import { checkMessageLimit } from '../middleware/planLimits.js';
 
 const router = Router();
 
@@ -83,6 +85,13 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
 
     const conv = convResult.rows[0];
 
+    // Check message limit for the agent's owner
+    const messageLimitCheck = await checkMessageLimit()(conv.agent_id);
+    if (!messageLimitCheck.allowed) {
+      res.status(429).json({ error: messageLimitCheck.message });
+      return;
+    }
+
     const historyResult = await pool.query(
       'SELECT role, content FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
       [conv.id]
@@ -95,12 +104,47 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
       [conv.id, 'user', content]
     );
 
+    // RAG: retrieve relevant chunks from the agent's knowledge base
+    const chunks = await retrieveChunks(conv.agent_id, content);
+    const contextBlock = buildContextBlock(chunks);
+
+    // Build system prompt with RAG context
+    let systemPrompt = conv.system_prompt;
+    if (contextBlock) {
+      systemPrompt += `\n\nAnswer ONLY using the context below. If the context does not contain the answer, say you don't have that information in your knowledge base and offer to pass the question to the team.${contextBlock}`;
+    } else {
+      // Check if the agent has any documents at all
+      const docCheck = await pool.query(
+        `SELECT COUNT(*) as count FROM knowledge_documents WHERE agent_id = $1 AND status = 'ready'`,
+        [conv.agent_id]
+      );
+      const hasDocuments = parseInt(docCheck.rows[0].count) > 0;
+
+      if (hasDocuments) {
+        // Agent has docs but nothing matched — no-match fallback
+        systemPrompt += `\n\nIMPORTANT: The customer's question was not found in your knowledge base. You must NOT answer from general knowledge. Instead, politely tell the customer you don't have information about that in your knowledge base, and offer to capture their question so the team can follow up. Ask for their name and email if not already provided.`;
+
+        // Auto-create a lead from the unanswered question
+        const convData = await pool.query(
+          'SELECT visitor_name, visitor_email FROM conversations WHERE id = $1',
+          [conv.id]
+        );
+        const visitor = convData.rows[0];
+        await pool.query(
+          `INSERT INTO leads (agent_id, conversation_id, visitor_name, visitor_email, question)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [conv.agent_id, conv.id, visitor.visitor_name, visitor.visitor_email, content]
+        );
+      }
+      // If no documents uploaded, use the agent's system prompt as-is (original behavior)
+    }
+
     const messages = [
       ...history.map((m: { role: string; content: string }) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content },
     ];
 
-    const aiResponse = await callClaude(conv.system_prompt, messages);
+    const aiResponse = await generateResponse(systemPrompt, messages);
 
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',

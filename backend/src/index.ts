@@ -10,10 +10,13 @@ import agentsRoutes from './routes/agents.js';
 import chatRoutes from './routes/chat.js';
 import conversationsRoutes from './routes/conversations.js';
 import dashboardRoutes from './routes/dashboard.js';
+import knowledgeRoutes from './routes/knowledge.js';
+import leadsRoutes from './routes/leads.js';
+import billingRoutes from './routes/billing.js';
 
 dotenv.config();
 
-const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_SECRET', 'DATABASE_URL', 'GROQ_API_KEY'];
+const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_SECRET', 'DATABASE_URL', 'OPENAI_API_KEY'];
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missing.length > 0) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -70,6 +73,9 @@ const chatLimiter = rateLimit({
 });
 
 app.use(limiter);
+
+// Stripe webhook needs raw body for signature verification — must come before express.json()
+app.use('/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
@@ -78,6 +84,9 @@ app.use('/agents', agentsRoutes);
 app.use('/chat', chatLimiter, chatRoutes);
 app.use('/conversations', conversationsRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/knowledge', knowledgeRoutes);
+app.use('/leads', leadsRoutes);
+app.use('/billing', billingRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

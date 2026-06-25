@@ -10,6 +10,8 @@ import AgentsPage from './pages/AgentsPage';
 import AgentConfigPage from './pages/AgentConfigPage';
 import ConversationsPage from './pages/ConversationsPage';
 import ConversationDetailPage from './pages/ConversationDetailPage';
+import LeadsPage from './pages/LeadsPage';
+import BillingPage from './pages/BillingPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -49,6 +51,8 @@ export default function App() {
             <Route path="agents/:id" element={<AgentConfigPage />} />
             <Route path="conversations" element={<ConversationsPage />} />
             <Route path="conversations/:id" element={<ConversationDetailPage />} />
+            <Route path="leads" element={<LeadsPage />} />
+            <Route path="billing" element={<BillingPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

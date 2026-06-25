@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Bot, TrendingUp, Clock, Plus, ChevronRight } from 'lucide-react';
+import { MessageSquare, Bot, TrendingUp, Clock, Plus, ChevronRight, UserPlus, FileText } from 'lucide-react';
 import { api } from '../lib/api';
 import { DashboardStats, Conversation } from '../types';
 import clsx from 'clsx';
@@ -52,6 +52,16 @@ export default function DashboardPage() {
       gradient: 'linear-gradient(135deg, rgba(167,139,250,0.2), rgba(167,139,250,0.05))',
       iconColor: 'var(--primary-light)', glow: 'rgba(167,139,250,0.15)',
     },
+    {
+      label: 'Leads', value: stats?.leads_count ?? '0', icon: UserPlus,
+      gradient: 'linear-gradient(135deg, rgba(251,191,36,0.2), rgba(251,191,36,0.05))',
+      iconColor: '#fbbf24', glow: 'rgba(251,191,36,0.2)',
+    },
+    {
+      label: 'Documents', value: stats?.documents_count ?? '0', icon: FileText,
+      gradient: 'linear-gradient(135deg, rgba(236,72,153,0.2), rgba(236,72,153,0.05))',
+      iconColor: '#ec4899', glow: 'rgba(236,72,153,0.2)',
+    },
   ];
 
   return (
@@ -68,7 +78,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {statCards.map(({ label, value, icon: Icon, gradient, iconColor, glow }) => (
           <div key={label} className="card p-5 relative overflow-hidden">
             <div className="absolute inset-0 rounded-2xl opacity-60" style={{ background: gradient }} />
