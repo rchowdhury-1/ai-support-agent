@@ -54,6 +54,8 @@ export default function App() {
             <Route path="leads" element={<LeadsPage />} />
             <Route path="billing" element={<BillingPage />} />
           </Route>
+          {/* Unknown routes fall back to the landing page rather than a blank screen */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>
