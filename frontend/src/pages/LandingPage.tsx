@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom';
 import { Zap, MessageSquare, BarChart3, Code2, Check, ArrowRight, Sparkles } from 'lucide-react';
 import ChatWidget from '../components/ui/ChatWidget';
 
+// Live demo agent (Kettle & Stone) — the landing widget runs real RAG against this agent.
+const DEMO_AGENT_ID = import.meta.env.VITE_DEMO_AGENT_ID || '769557fd-b98b-427f-b2b5-519fc690845f';
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -197,12 +200,12 @@ export default function LandingPage() {
         </p>
       </footer>
 
-      {/* Live demo widget */}
+      {/* Live demo widget — real RAG against the Kettle & Stone demo agent */}
       <ChatWidget
-        demoMode
-        color="var(--primary)"
-        agentName="SupportAI Demo"
-        welcomeMessage="Hi! I'm a demo of SupportAI. Try asking me anything!"
+        agentId={DEMO_AGENT_ID}
+        color="#b45309"
+        agentName="Kettle & Stone Support"
+        welcomeMessage="👋 This is a live SupportAI demo for a fictional coffee brand, Kettle & Stone. Ask about delivery, subscriptions, or how to brew a great cup — answers come straight from its knowledge base."
       />
     </div>
   );

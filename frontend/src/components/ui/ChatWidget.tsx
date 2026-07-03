@@ -58,7 +58,7 @@ export default function ChatWidget({
         await new Promise((r) => setTimeout(r, 1000));
         setMessages((prev) => [...prev, {
           role: 'assistant',
-          content: "Thanks for your question! This is a demo. In the real version, I'm powered by Gemini AI and can answer questions specific to your business.",
+          content: "This is a live preview. Once your agent is published, it answers from your knowledge base using OpenAI — trained on the docs you upload.",
         }]);
       } else if (sessionId) {
         const res = await api.post('/chat/message', { sessionId, content: userMessage });
