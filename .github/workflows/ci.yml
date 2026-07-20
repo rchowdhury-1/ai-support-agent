@@ -25,7 +25,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/supportai_v2_test
+      # The app connects as a role WITHOUT superuser/BYPASSRLS so the RLS suite
+      # actually exercises row-level security; migrations run as the owner.
+      DATABASE_URL: postgresql://app_user:app@localhost:5432/supportai_v2_test
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/supportai_v2_test
+      APP_DB_ROLE: app_user
       JWT_SECRET: ci-jwt-secret-0123456789abcdef0123456789abcdef
       REFRESH_SECRET: ci-refresh-secret-0123456789abcdef01234567
       NODE_ENV: test
@@ -38,6 +42,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: Create non-superuser app role
+        run: psql "$MIGRATE_DATABASE_URL" -c "CREATE ROLE app_user LOGIN PASSWORD 'app';"
       - run: npm run migrate
       - run: npm test
 

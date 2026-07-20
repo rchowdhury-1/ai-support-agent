@@ -1,109 +1,114 @@
-import { Router, Request, Response } from 'express';
+/**
+ * v2 auth. No self-serve registration — users are provisioned by the operator.
+ * Access token: 15m JWT, held in memory by the client only.
+ * Refresh token: opaque random value in an httpOnly Secure SameSite=Lax cookie
+ * scoped to /auth; stored server-side as a SHA-256 hash; rotated on every use,
+ * with reuse detection revoking the whole family.
+ */
+import { createHash, randomBytes } from 'node:crypto';
+import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import pool from '../db/pool.js';
+import { withSystem } from '../db/tenant.js';
 
 const router = Router();
 const isProd = process.env.NODE_ENV === 'production';
 
-const registerSchema = z.object({
-  name: z.string().min(2).max(100),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
+export const REFRESH_COOKIE = 'sai_refresh';
+const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-
-function generateAccessToken(userId: string): string {
-  return jwt.sign({ userId }, process.env.JWT_SECRET!, { expiresIn: '15m' });
+export interface AccessClaims {
+  sub: string;
+  tenantId: string | null;
+  role: 'operator' | 'client';
 }
 
-function generateRefreshToken(userId: string): string {
-  return jwt.sign({ userId }, process.env.REFRESH_SECRET!, { expiresIn: '7d' });
+interface AuthUser {
+  id: string;
+  tenant_id: string | null;
+  role: 'operator' | 'client';
+  name: string;
+  business_name: string | null;
 }
 
-router.post('/register', async (req: Request, res: Response): Promise<void> => {
-  const result = registerSchema.safeParse(req.body);
-  if (!result.success) {
-    res.status(400).json({ error: result.error.errors[0].message });
-    return;
-  }
+function signAccessToken(user: AuthUser): string {
+  const claims: Omit<AccessClaims, 'sub'> = { tenantId: user.tenant_id, role: user.role };
+  return jwt.sign(claims, process.env.JWT_SECRET!, { subject: user.id, expiresIn: '15m' });
+}
 
-  const { name, email, password } = result.data;
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
-  try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      res.status(409).json({ error: 'Email already registered' });
-      return;
-    }
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase())
+    .slice(0, 2)
+    .join('');
+}
 
-    const password_hash = await bcrypt.hash(password, 12);
-    const userResult = await pool.query(
-      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, plan, created_at',
-      [name, email, password_hash]
-    );
-    const user = userResult.rows[0];
+function sessionUser(user: AuthUser) {
+  return {
+    name: user.name,
+    initials: initials(user.name),
+    businessName: user.business_name ?? 'SupportAI',
+    role: user.role,
+  };
+}
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+async function issueRefreshToken(userId: string): Promise<string> {
+  const token = randomBytes(48).toString('base64url');
+  await withSystem((db) =>
+    db.query('INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)', [
+      userId,
+      hashToken(token),
+      new Date(Date.now() + REFRESH_TTL_MS),
+    ])
+  );
+  return token;
+}
 
-    await pool.query(
-      'INSERT INTO refresh_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)',
-      [refreshToken, user.id, expiresAt]
-    );
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    path: '/auth',
+    maxAge: REFRESH_TTL_MS,
+  });
+}
 
-    res.status(201).json({ user, accessToken, refreshToken });
-  } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+const USER_QUERY = `
+  SELECT u.id, u.tenant_id, u.role, u.name, u.password_hash, t.name AS business_name
+  FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
+`;
+
+const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
-  const result = loginSchema.safeParse(req.body);
-  if (!result.success) {
-    res.status(400).json({ error: result.error.errors[0].message });
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Email and password are required' });
     return;
   }
-
-  const { email, password } = result.data;
+  const { email, password } = parsed.data;
 
   try {
-    const userResult = await pool.query(
-      'SELECT id, name, email, password_hash, plan, created_at FROM users WHERE email = $1',
-      [email]
+    const { rows } = await withSystem((db) =>
+      db.query(`${USER_QUERY} WHERE u.email = $1`, [email.toLowerCase()])
     );
-
-    if (userResult.rows.length === 0) {
-      res.status(401).json({ error: 'Invalid email or password' });
-      return;
-    }
-
-    const user = userResult.rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
-
+    const user = rows[0] as (AuthUser & { password_hash: string }) | undefined;
+    const valid = user && (await bcrypt.compare(password, user.password_hash));
     if (!valid) {
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    await pool.query(
-      'INSERT INTO refresh_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)',
-      [refreshToken, user.id, expiresAt]
-    );
-
-    const { password_hash: _, ...safeUser } = user;
-    res.json({ user: safeUser, accessToken, refreshToken });
+    setRefreshCookie(res, await issueRefreshToken(user.id));
+    res.json({ accessToken: signAccessToken(user), user: sessionUser(user) });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -111,53 +116,58 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 });
 
 router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
-  const token = req.body?.refreshToken || req.cookies?.refreshToken;
-
+  const token: string | undefined = req.cookies?.[REFRESH_COOKIE];
   if (!token) {
     res.status(401).json({ error: 'No refresh token' });
     return;
   }
 
   try {
-    const payload = jwt.verify(token, process.env.REFRESH_SECRET!) as { userId: string };
+    const result = await withSystem(async (db) => {
+      const { rows } = await db.query(
+        'SELECT id, user_id, expires_at, revoked_at FROM refresh_tokens WHERE token_hash = $1',
+        [hashToken(token)]
+      );
+      const stored = rows[0];
+      if (!stored) return null;
+      if (stored.revoked_at || new Date(stored.expires_at) < new Date()) {
+        // Reuse of a rotated/expired token — revoke everything for this user.
+        await db.query(
+          'UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
+          [stored.user_id]
+        );
+        return null;
+      }
+      await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [stored.id]);
+      const userRows = await db.query(`${USER_QUERY} WHERE u.id = $1`, [stored.user_id]);
+      return (userRows.rows[0] as AuthUser | undefined) ?? null;
+    });
 
-    const stored = await pool.query(
-      'SELECT id FROM refresh_tokens WHERE token = $1 AND user_id = $2 AND expires_at > NOW()',
-      [token, payload.userId]
-    );
-
-    if (stored.rows.length === 0) {
+    if (!result) {
+      res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
       res.status(401).json({ error: 'Invalid refresh token' });
       return;
     }
 
-    const userResult = await pool.query(
-      'SELECT id, name, email, plan, created_at FROM users WHERE id = $1',
-      [payload.userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      res.status(401).json({ error: 'User not found' });
-      return;
-    }
-
-    const user = userResult.rows[0];
-    const accessToken = generateAccessToken(user.id);
-    res.json({ user, accessToken });
-  } catch {
-    res.status(401).json({ error: 'Invalid refresh token' });
+    setRefreshCookie(res, await issueRefreshToken(result.id));
+    res.json({ accessToken: signAccessToken(result), user: sessionUser(result) });
+  } catch (err) {
+    console.error('Refresh error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 router.post('/logout', async (req: Request, res: Response): Promise<void> => {
-  const token = req.body?.refreshToken || req.cookies?.refreshToken;
-
+  const token: string | undefined = req.cookies?.[REFRESH_COOKIE];
   if (token) {
-    await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [token]);
+    await withSystem((db) =>
+      db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1', [
+        hashToken(token),
+      ])
+    ).catch(() => undefined);
   }
-
-  res.clearCookie('refreshToken');
-  res.json({ message: 'Logged out successfully' });
+  res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
+  res.json({ ok: true });
 });
 
 export default router;
