@@ -32,6 +32,8 @@ jobs:
       APP_DB_ROLE: app_user
       JWT_SECRET: ci-jwt-secret-0123456789abcdef0123456789abcdef
       REFRESH_SECRET: ci-refresh-secret-0123456789abcdef01234567
+      STRIPE_SECRET_KEY: sk_test_dummy_key_for_signature_tests
+      STRIPE_WEBHOOK_SECRET: whsec_test_secret_0123456789abcdef
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4

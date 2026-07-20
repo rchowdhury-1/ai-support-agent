@@ -5,8 +5,11 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
+import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
+import billingRoutes from './routes/billing.js';
 import chatRoutes from './routes/chat.js';
+import clientRoutes from './routes/client.js';
 
 dotenv.config();
 
@@ -49,7 +52,9 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '100kb' }));
+// Stripe webhook signature verification needs the raw body — before json().
+app.use('/billing/webhook', express.raw({ type: 'application/json' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 const chatLimiter = rateLimit({
@@ -61,6 +66,9 @@ const chatLimiter = rateLimit({
 
 app.use('/auth', authRoutes);
 app.use('/chat', chatLimiter, chatRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', clientRoutes);
+app.use('/billing', billingRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: 2, timestamp: new Date().toISOString() });
