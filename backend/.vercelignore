@@ -1,7 +1,2 @@
-node_modules
-src
-tsconfig.json
-vitest.config.ts
-build.mjs
 .env
 .env.*
