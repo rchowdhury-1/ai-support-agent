@@ -38,7 +38,7 @@ export default function OverviewPage() {
       <header className="pt-[34px] pb-6 flex items-end gap-4 flex-wrap">
         <div className="flex-1 min-w-[240px]">
           <Greeting name={user.name} />
-          <div className="text-sm text-ink2">Everything is handled — here&rsquo;s July so far.</div>
+          <div className="text-sm text-ink2">Everything is handled — here&rsquo;s {o.rangeLabel} so far.</div>
         </div>
         <div className="text-[12.5px] font-bold text-ink2 border border-line rounded-full px-[13px] py-1.5 bg-surface">
           {o.rangeLabel}

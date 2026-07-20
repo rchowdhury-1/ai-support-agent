@@ -40,7 +40,15 @@ export default function ConversationsPage() {
             </Link>
           );
         })}
-        <div className="py-[13px] text-xs text-ink3">Showing this week · 42 conversations in July so far</div>
+        {convos.length === 0 ? (
+          <div className="py-11 text-center">
+            <div className="text-[13.5px] font-bold mb-1">No conversations yet</div>
+            <div className="text-[12.5px] text-ink2">Visitor chats appear here the moment the widget answers its first question.</div>
+          </div>
+        ) : null}
+        <div className="py-[13px] text-xs text-ink3">
+          Showing the most recent {convos.length} conversation{convos.length === 1 ? '' : 's'}
+        </div>
       </div>
     </section>
   );
