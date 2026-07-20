@@ -421,19 +421,21 @@ router.post('/tenants/:id/sources', async (req: AuthedRequest, res: Response) =>
       return;
     }
     const p = parsed.data;
+    // Processed synchronously: on serverless, work started after the response
+    // is killed with the invocation. Sources that fail land in `error` state.
     if (p.kind === 'text') {
       const sourceId = await createSource({ ...ta, kind: 'text', name: p.name });
-      processSource(sourceId, p.text).catch((err) => console.error('ingest error:', err));
+      await processSource(sourceId, p.text).catch((err) => console.error('ingest error:', err));
       res.status(202).json({ sourceIds: [sourceId] });
       return;
     }
     const ids: string[] = [];
-    for (const url of p.urls) {
+    for (const url of p.urls.slice(0, 20)) {
       const u = new URL(url);
       const name = u.pathname === '/' || u.pathname === '' ? u.hostname : u.pathname;
       const sourceId = await createSource({ ...ta, kind: 'site', name, url });
       ids.push(sourceId);
-      refreshSource(sourceId).catch((err) => console.error('ingest error:', err));
+      await refreshSource(sourceId).catch((err) => console.error('ingest error:', err));
     }
     res.status(202).json({ sourceIds: ids });
   } catch (err) {
@@ -464,7 +466,7 @@ router.post(
         return;
       }
       const sourceId = await createSource({ ...ta, kind: 'pdf', name: req.file.originalname });
-      processSource(sourceId, text).catch((err) => console.error('ingest error:', err));
+      await processSource(sourceId, text).catch((err) => console.error('ingest error:', err));
       res.status(202).json({ sourceIds: [sourceId] });
     } catch (err) {
       console.error('pdf error:', err);
@@ -509,7 +511,7 @@ router.get('/tenants/:id/sources', async (req: AuthedRequest, res: Response) => 
 
 router.post('/sources/:id/refresh', async (req: AuthedRequest, res: Response) => {
   try {
-    refreshSource(req.params.id!).catch((err) => console.error('refresh error:', err));
+    await refreshSource(req.params.id!).catch((err) => console.error('refresh error:', err));
     res.status(202).json({ ok: true });
   } catch (err) {
     console.error('refresh error:', err);

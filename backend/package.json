@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "vercel-build": "echo 'prebuilt locally (node build.mjs)'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
@@ -48,6 +49,7 @@
     "@types/pg": "^8.11.6",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",
+    "esbuild": "^0.28.1",
     "supertest": "^7.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.3",
