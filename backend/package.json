@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx src/db/seed.ts",
-    "vercel-build": "echo 'prebuilt locally (node build.mjs)'"
+    "vercel-build": "node build.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
