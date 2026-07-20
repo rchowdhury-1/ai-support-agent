@@ -1,0 +1,368 @@
+import Link from 'next/link';
+import { Nav } from './_marketing/Nav';
+import { Reveal } from './_marketing/Reveal';
+import { ReportPanel } from './_marketing/ReportPanel';
+import { WidgetDemo } from './_marketing/WidgetDemo';
+
+const steps = [
+  {
+    n: '01',
+    title: 'We load your content',
+    body: "Your website, PDFs and price lists — nothing else. We do the loading and checking for you; you approve what it's allowed to know.",
+  },
+  {
+    n: '02',
+    title: 'It answers your customers',
+    body: "Instantly and politely, with the source shown under every answer. When it doesn't know, it says so and takes a message instead.",
+  },
+  {
+    n: '03',
+    title: "You learn what they're asking",
+    body: "Each month you get the questions your website couldn't answer — and we turn them into new answers, one by one.",
+  },
+];
+
+const verticals = [
+  {
+    name: 'Accountants',
+    pain: 'Stop repeating your fees for the fortieth time this month.',
+    qs: ['How much is a self-assessment return?', 'When is the VAT deadline?', 'Do you work with contractors?'],
+  },
+  {
+    name: 'Law firms',
+    pain: 'Every call starts with the same three questions.',
+    qs: ['How much does a simple will cost?', 'Do you offer fixed-fee conveyancing?', 'Are you taking on new family cases?'],
+  },
+  {
+    name: 'Trades',
+    pain: 'Stop answering "what’s your call-out charge?" twelve times a week.',
+    qs: ['What’s your call-out charge?', 'Do you cover the whole of Kent?', 'Are you Gas Safe registered?'],
+  },
+];
+
+const trustIcons: Record<string, React.ReactNode> = {
+  shield: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z" />
+      <path d="m9 11.6 2 2 4-4.4" />
+    </svg>
+  ),
+  doc: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8M8 17h5" />
+    </svg>
+  ),
+  chat: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M8 10h.01M12 10h.01M16 10h.01" />
+    </svg>
+  ),
+  eye: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-7.2 11-7.2S23 12 23 12s-4 7.2-11 7.2S1 12 1 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+};
+
+const trust = [
+  {
+    icon: 'shield',
+    title: 'Only your approved content',
+    body: "It answers from the pages and documents you've signed off — nothing scraped, nothing invented.",
+  },
+  {
+    icon: 'doc',
+    title: 'Every answer shows its source',
+    body: 'A line under each reply says exactly where it came from — "From: Services & Fees" — so anyone can check.',
+  },
+  {
+    icon: 'chat',
+    title: 'It says "I don’t know"',
+    body: "When it can't answer, it says so honestly, takes the customer's details, and hands over to you. No guessing, ever.",
+  },
+  {
+    icon: 'eye',
+    title: 'You see everything',
+    body: 'Every conversation sits in your dashboard, and a disclaimer of your choosing appears under every answer.',
+  },
+];
+
+const included = [
+  'Full setup done for you',
+  'Trained on your content only',
+  'Monthly insight report, written for you',
+  'You approve everything it knows',
+];
+
+const Check = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
+export default function Home() {
+  return (
+    <div id="top" className="min-h-screen">
+      <Nav />
+
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <header className="relative overflow-hidden">
+        <div
+          className="absolute -right-36 -top-20 w-[720px] h-[720px] pointer-events-none"
+          style={{ background: 'radial-gradient(circle at 55% 42%, var(--glow), transparent 62%)' }}
+        />
+        <div className="container-site relative grid grid-cols-1 md:grid-cols-2 gap-14 items-center pt-[72px] pb-[88px]">
+          <div className="max-w-[560px]">
+            <Reveal index={0}>
+              <div className="eyebrow mb-[22px]">Done-for-you AI support · UK small firms</div>
+            </Reveal>
+            <Reveal index={1}>
+              <h1 className="display-h text-[clamp(38px,4.6vw,56px)] leading-[1.04] tracking-[-.035em] mb-[22px] [text-wrap:balance]">
+                Your website, answering customers — <em className="accent-em">day and night.</em>
+              </h1>
+            </Reveal>
+            <Reveal index={2}>
+              <p className="text-[17px] leading-relaxed text-ink2 max-w-[50ch] mb-[26px] [text-wrap:pretty]">
+                An assistant trained on your business&rsquo;s own content — set up for you, by a
+                person. It answers politely, shows its source, and takes a message when it
+                doesn&rsquo;t know.
+              </p>
+            </Reveal>
+            <Reveal index={3}>
+              <div className="flex flex-wrap gap-3 items-center mb-[26px]">
+                <a href="#pricing" className="btn-primary text-[15px] px-[22px] py-[13px]">
+                  Book a 15-minute call
+                </a>
+                <a href="#report" className="btn-ghost text-[15px] px-5 py-3">
+                  See the monthly report
+                </a>
+              </div>
+            </Reveal>
+            <Reveal index={4}>
+              <div className="kicker max-w-[44ch]">
+                It only answers from content you&rsquo;ve approved — and it tells you what it
+                couldn&rsquo;t answer.
+              </div>
+            </Reveal>
+          </div>
+          <Reveal index={1} className="justify-self-center">
+            <WidgetDemo />
+          </Reveal>
+        </div>
+      </header>
+
+      {/* ── How it works ─────────────────────────────────── */}
+      <section id="how" className="border-t border-line">
+        <div className="container-site py-[88px]">
+          <Reveal index={0}>
+            <div className="eyebrow mb-[18px]">How it works</div>
+          </Reveal>
+          <Reveal index={1}>
+            <h2 className="display-h text-[clamp(30px,3.4vw,42px)] mb-[46px]">
+              Three steps. <em className="accent-em">No jargon.</em>
+            </h2>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-[18px]">
+            {steps.map((s, i) => (
+              <Reveal key={s.n} index={i}>
+                <div className="card p-7 flex flex-col gap-3 h-full">
+                  <div className="font-mono text-xs font-bold text-accent">{s.n}</div>
+                  <div className="text-lg font-bold tracking-[-.015em]">{s.title}</div>
+                  <p className="text-[14.5px] leading-[1.65] text-ink2 [text-wrap:pretty]">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── The monthly report ───────────────────────────── */}
+      <section id="report" className="border-t border-line">
+        <div className="container-site grid grid-cols-1 md:grid-cols-2 gap-14 items-center py-[88px]">
+          <div className="max-w-[520px]">
+            <Reveal index={0}>
+              <div className="eyebrow mb-[18px]">The monthly report</div>
+            </Reveal>
+            <Reveal index={1}>
+              <h2 className="display-h text-[clamp(30px,3.4vw,42px)] leading-[1.1] mb-5 [text-wrap:balance]">
+                Every unanswered question is <em className="accent-em">a customer telling you</em>{' '}
+                what&rsquo;s missing.
+              </h2>
+            </Reveal>
+            <Reveal index={2}>
+              <p className="text-base leading-[1.65] text-ink2 mb-[22px] [text-wrap:pretty]">
+                We collect the questions your website couldn&rsquo;t answer, and every month we
+                fix them. Last month our demo firm was missing VAT return pricing — it&rsquo;s
+                now answered dozens of times a week.
+              </p>
+            </Reveal>
+            <Reveal index={3}>
+              <div className="kicker">You&rsquo;ll know what customers want before your competitors do.</div>
+            </Reveal>
+          </div>
+          <Reveal index={1} className="justify-self-center w-[min(480px,100%)]">
+            <ReportPanel />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Who it's for ─────────────────────────────────── */}
+      <section id="who" className="border-t border-line">
+        <div className="container-site py-[88px]">
+          <Reveal index={0}>
+            <div className="eyebrow mb-[18px]">Built for your kind of firm</div>
+          </Reveal>
+          <Reveal index={1}>
+            <h2 className="display-h text-[clamp(30px,3.4vw,42px)] mb-[46px]">
+              The same questions, <em className="accent-em">every single week.</em>
+            </h2>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-[18px]">
+            {verticals.map((v, i) => (
+              <Reveal key={v.name} index={i}>
+                <div className="card p-[26px] flex flex-col gap-3.5 h-full">
+                  <div className="text-lg font-bold tracking-[-.015em]">{v.name}</div>
+                  <p className="text-[13.5px] leading-[1.55] text-ink2 italic">{v.pain}</p>
+                  <div className="flex flex-col gap-2 mt-0.5">
+                    {v.qs.map((q) => (
+                      <div key={q} className="flex gap-[9px] items-start border border-line bg-page rounded-[10px] px-3 py-[9px]">
+                        <span className="font-serif italic text-accent text-[15px] leading-[1.3] flex-none">&ldquo;</span>
+                        <span className="text-[13px] leading-normal text-ink2">{q}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Trust ────────────────────────────────────────── */}
+      <section id="trust" className="border-t border-line">
+        <div className="container-site py-[88px]">
+          <div className="max-w-[640px]">
+            <Reveal index={0}>
+              <div className="eyebrow mb-[18px]">Why it won&rsquo;t embarrass you</div>
+            </Reveal>
+            <Reveal index={1}>
+              <h2 className="display-h text-[clamp(30px,3.4vw,42px)] mb-4">
+                It doesn&rsquo;t guess. <em className="accent-em">Ever.</em>
+              </h2>
+            </Reveal>
+            <Reveal index={2}>
+              <p className="text-base leading-relaxed text-ink2 mb-11 [text-wrap:pretty]">
+                Your clients trust you because you&rsquo;re careful. Your assistant should be
+                held to the same standard.
+              </p>
+            </Reveal>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[18px]">
+            {trust.map((tItem, i) => (
+              <Reveal key={tItem.title} index={i}>
+                <div className="card p-[26px] flex flex-col gap-3 h-full">
+                  <div className="w-[38px] h-[38px] rounded-[11px] bg-accent-soft text-accent flex items-center justify-center">
+                    {trustIcons[tItem.icon]}
+                  </div>
+                  <div className="text-base font-bold tracking-[-.01em]">{tItem.title}</div>
+                  <p className="text-sm leading-relaxed text-ink2 [text-wrap:pretty]">{tItem.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing ──────────────────────────────────────── */}
+      <section id="pricing" className="border-t border-line">
+        <div className="container-site py-[88px] flex justify-center">
+          <Reveal index={0} className="w-[min(620px,100%)]">
+            <div className="card rounded-[20px] py-11 px-[clamp(24px,5vw,52px)] text-center shadow-[0_24px_60px_-30px_rgba(24,33,28,.28)]">
+              <div className="eyebrow mb-5">Simple pricing</div>
+              <div className="text-[15px] text-ink2 mb-1.5">From</div>
+              <div className="flex items-baseline justify-center gap-2.5 flex-wrap">
+                <span className="font-serif font-semibold text-[clamp(38px,5vw,50px)] tracking-[-.02em] leading-[1.15] border-b-2 border-dashed border-line-strong">
+                  £500
+                </span>
+                <span className="text-base text-ink2 font-semibold">setup</span>
+                <span className="font-serif italic text-[26px] text-ink3">+</span>
+                <span className="font-serif font-semibold text-[clamp(38px,5vw,50px)] tracking-[-.02em] leading-[1.15] border-b-2 border-dashed border-line-strong">
+                  £99
+                </span>
+                <span className="text-base text-ink2 font-semibold">/month</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 mt-4 mb-[26px] font-mono text-[9.5px] font-bold uppercase tracking-[.12em] text-warn border border-dashed border-warn rounded-full px-[11px] py-[5px]">
+                Placeholder figures — set before launch
+              </div>
+              <div className="flex flex-col gap-[11px] w-fit mx-auto mb-[30px] text-left">
+                {included.map((line) => (
+                  <div key={line} className="flex gap-2.5 items-center">
+                    <Check />
+                    <span className="text-[14.5px] text-ink">{line}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="#maker" className="btn-primary text-[15.5px] px-[26px] py-3.5 rounded-xl">
+                Book a 15-minute call
+              </a>
+              <div className="text-[13px] text-ink3 mt-3.5 leading-normal">
+                Final quote after a short call — it depends on how much content you have.
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Note from the maker ──────────────────────────── */}
+      <section id="maker" className="border-t border-line">
+        <div className="max-w-[900px] mx-auto px-6 py-[88px]">
+          <Reveal index={0}>
+            <div className="flex gap-7 items-start flex-wrap">
+              <div className="w-[76px] h-[76px] rounded-full bg-accent-soft text-accent flex items-center justify-center font-serif italic text-3xl flex-none">
+                R
+              </div>
+              <div className="flex-1 min-w-[280px]">
+                <div className="eyebrow mb-4">A note from the maker</div>
+                <p className="font-serif italic font-medium text-[clamp(21px,2.6vw,26px)] leading-[1.4] tracking-[-.01em] text-ink mb-[18px] [text-wrap:pretty]">
+                  &ldquo;I build your website, and I build your assistant. If something&rsquo;s
+                  wrong, you ring me — not a ticket queue.&rdquo;
+                </p>
+                <p className="text-[15px] leading-[1.65] text-ink2 max-w-[60ch] mb-5 [text-wrap:pretty]">
+                  SupportAI is run by one person — me. I load your content myself, check the
+                  source behind every answer, and write your monthly report by hand. You deal
+                  with someone who actually knows your business.
+                </p>
+                <div className="flex items-center gap-2.5 flex-wrap mb-6">
+                  <span className="text-[15px] font-bold">Razwanul Chowdhury</span>
+                  <span className="text-[13.5px] text-ink3">— builds websites &amp; assistants for small UK firms</span>
+                </div>
+                <a href="#pricing" className="btn-primary text-[14.5px] px-5 py-3">
+                  Book a 15-minute call
+                </a>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Footer ───────────────────────────────────────── */}
+      <footer className="border-t border-line">
+        <div className="container-site py-7 flex items-center gap-[18px] flex-wrap">
+          <span className="w-[22px] h-[22px] rounded-md bg-accent text-accent-ink flex items-center justify-center font-serif italic text-[13px]">
+            S
+          </span>
+          <span className="text-[13px] font-bold">SupportAI</span>
+          <span className="text-[12.5px] text-ink3">Made by Razwanul Chowdhury</span>
+          <span className="flex-1" />
+          <a href="#top" className="text-[12.5px] text-ink3 no-underline hover:text-ink">Privacy</a>
+          <a href="#top" className="text-[12.5px] text-ink3 no-underline hover:text-ink">Terms</a>
+          <Link href="/login" className="text-[12.5px] text-ink3 no-underline hover:text-ink">Client login</Link>
+        </div>
+      </footer>
+    </div>
+  );
+}

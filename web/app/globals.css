@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SupportAI design tokens — transcribed from the approved Claude Design
+   "Marketing Site" (light/dark via the data-sai attribute on <html>). */
+:root,
+[data-sai='light'] {
+  --p: #f7f4ec;
+  --s: #ffffff;
+  --b: #e6e0d2;
+  --bs: #d2cab6;
+  --t: #20241f;
+  --t2: #636a5c;
+  --t3: #949a8a;
+  --a: #2d5a44;
+  --ai: #f7f3e8;
+  --asf: #e7eee5;
+  --g: #2f7d4f;
+  --am: #a96f1f;
+  --rd: #b0452f;
+  --glow: rgba(45, 90, 68, 0.17);
+  --sk: #f0ede3;
+  --code: #1b201a;
+  --codet: #d8dccb;
+}
+[data-sai='dark'] {
+  --p: #131611;
+  --s: #1b201a;
+  --b: #2d342c;
+  --bs: #3a423a;
+  --t: #ecebe1;
+  --t2: #a8ac9c;
+  --t3: #7c816f;
+  --a: #7fb894;
+  --ai: #16241c;
+  --asf: #243026;
+  --g: #6fbd8b;
+  --am: #d2a05a;
+  --rd: #d98a75;
+  --glow: rgba(127, 184, 148, 0.14);
+  --sk: #171b15;
+  --code: #0e110d;
+  --codet: #c4c9b6;
+}
+
+body {
+  background: var(--p);
+  color: var(--t);
+  transition: background 0.35s ease, color 0.35s ease;
+}
+
+a { color: var(--a); }
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up { animation: fadeUp 0.35s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
+}
+
+@layer components {
+  .container-site { @apply max-w-site mx-auto px-6; }
+
+  .eyebrow {
+    @apply font-mono text-[11.5px] font-semibold uppercase text-accent;
+    letter-spacing: 0.16em;
+  }
+  .display-h {
+    @apply font-bold text-ink;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+  }
+  .accent-em {
+    @apply font-serif italic font-medium text-accent not-italic;
+    font-style: italic;
+    letter-spacing: -0.02em;
+  }
+  .kicker {
+    @apply font-serif italic text-ink2;
+    border-left: 3px solid var(--a);
+    padding: 2px 0 2px 16px;
+    font-size: 18.5px;
+    line-height: 1.45;
+  }
+  .card { @apply bg-surface border border-line rounded-2xl; }
+  .btn-primary {
+    @apply inline-block bg-accent text-accent-ink font-bold rounded-[11px] no-underline;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-ghost {
+    @apply inline-block border border-line-strong text-ink font-semibold rounded-[11px] no-underline bg-transparent;
+  }
+  .btn-ghost:hover { border-color: var(--a); }
+}
+
+/* Scroll reveal — applied by the Reveal component after mount so content is
+   never hidden without JavaScript. */
+.rv {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.6, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rv { opacity: 1; transform: none; transition: none; }
+}
