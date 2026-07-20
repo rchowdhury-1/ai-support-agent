@@ -1,0 +1,17 @@
+{
+  "name": "supportai-widget",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs --minify",
+    "build:dev": "node build.mjs",
+    "check": "tsc --noEmit",
+    "test": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.5.3"
+  }
+}

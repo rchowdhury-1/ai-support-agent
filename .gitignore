@@ -11,3 +11,6 @@ dist/
 # Build artifacts
 *.tsbuildinfo
 .vercel
+
+# Next.js
+.next/

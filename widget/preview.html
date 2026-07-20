@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SupportAI widget v2 — state preview</title>
+<style>
+  body { margin: 0; min-height: 100vh; font-family: ui-sans-serif, system-ui, sans-serif; background: #EFEBE0; color: #20241F; padding: 40px; }
+  body.darkbg { background: #141713; color: #ECEBE1; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { font-size: 13px; color: #636A5C; max-width: 60ch; }
+  .darkbg p { color: #A8AC9C; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 30px; }
+  nav a { font-size: 12.5px; padding: 7px 12px; border-radius: 999px; border: 1px solid #C9C2AE; color: inherit; text-decoration: none; }
+  nav a.on { background: #2D5A44; border-color: #2D5A44; color: #F7F3E8; }
+  .fake { max-width: 560px; display: flex; flex-direction: column; gap: 10px; opacity: .45; }
+  .fake div { height: 12px; border-radius: 6px; background: #C5BFAC; }
+  .darkbg .fake div { background: #333B31; }
+</style>
+</head>
+<body>
+<h1>SupportAI widget v2 — state preview</h1>
+<p>Mocked API (no backend). Pick a scenario, then use the widget bottom-right. Chips and typed questions both work; ask something unknown (e.g. “do you do audits?”) to see the honest refusal + details form.</p>
+<nav id="nav"></nav>
+<div class="fake"><div style="width:55%"></div><div style="width:80%"></div><div style="width:68%"></div><div style="width:74%"></div></div>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const scenario = params.get('s') || 'v2';         // v2 | law | trade | v1 | paused | limit | error
+  const theme = params.get('theme') || 'light';
+
+  const states = [
+    ['v2', 'Brampton & Hale (v2)'], ['law', 'Aldergate Solicitors'], ['trade', 'Foxton Roofing (white-label)'],
+    ['v1', 'v1 backend fallback'], ['paused', 'Agent paused'], ['limit', 'Cap reached'], ['error', 'API down'],
+  ];
+  const nav = document.getElementById('nav');
+  for (const [key, label] of states) {
+    const a = document.createElement('a');
+    a.textContent = label;
+    a.href = '?s=' + key + (theme === 'dark' ? '&theme=dark' : '');
+    if (key === scenario) a.className = 'on';
+    nav.appendChild(a);
+  }
+  const t = document.createElement('a');
+  t.textContent = theme === 'dark' ? 'Light page' : 'Dark theme';
+  t.href = '?s=' + scenario + (theme === 'dark' ? '' : '&theme=dark');
+  nav.appendChild(t);
+  if (theme === 'dark') document.body.classList.add('darkbg');
+
+  const personas = {
+    v2: {
+      brand: 'Brampton & Hale', accent: '#2D5A44', powered: true,
+      disclaimer: 'General guidance, not financial advice.',
+      welcome: "Hello — I'm the Brampton & Hale assistant. Ask me about our services, fees or opening hours.",
+      chips: ['How much is a self-assessment tax return?', 'What are your opening hours?', 'Do you do audits?'],
+      qa: [
+        { q: 'self-assessment', a: "A self-assessment tax return is £180 including VAT, covering employment income plus one rental property. Anything more involved and we'll quote after a quick look at your records.", src: 'Services & Fees' },
+        { q: 'opening hours', a: "We're open 9am to 5:30pm, Monday to Friday — with Saturday mornings by appointment during January.", src: 'Contact & Opening Hours' },
+      ],
+    },
+    law: {
+      brand: 'Aldergate Solicitors', accent: '#1F3A5F', powered: true,
+      disclaimer: 'General information, not legal advice.',
+      welcome: "Hello — I'm the Aldergate Solicitors assistant. Ask me about our services, fees or how to get started.",
+      chips: ['How much does a simple will cost?', 'Do you offer fixed-fee conveyancing?', 'Do you handle employment tribunals?'],
+      qa: [
+        { q: 'will', a: 'A single will is £195 plus VAT, or £295 for a couple — including a review meeting with one of our solicitors.', src: 'Wills & Probate Fees' },
+        { q: 'conveyancing', a: "Yes — residential conveyancing is fixed-fee from £850 plus VAT and disbursements. You'll receive a full written quote before we begin.", src: 'Conveyancing' },
+      ],
+    },
+    trade: {
+      brand: 'Foxton Roofing', accent: '#6E3B2A', powered: false,
+      disclaimer: "Estimates are indicative until we've seen the job.",
+      welcome: "Hello — ask me about roof repairs, call-out charges or how to get a quote.",
+      chips: ["What's your call-out charge?", 'Do you work weekends?'],
+      qa: [
+        { q: 'call-out', a: 'Our standard call-out is £85 within the M25, which comes off the final bill if you go ahead with the work.', src: 'Prices' },
+        { q: 'weekend', a: 'We work Saturdays at standard rates; Sundays are emergency-only at time and a half.', src: 'Prices' },
+      ],
+    },
+  };
+  const persona = personas[scenario] || personas.v2;
+
+  function sse(events) {
+    const enc = new TextEncoder();
+    const stream = new ReadableStream({
+      start(ctrl) {
+        let i = 0;
+        const push = () => {
+          if (i >= events.length) return ctrl.close();
+          const [event, data, delay] = events[i++];
+          ctrl.enqueue(enc.encode('event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n'));
+          setTimeout(push, delay);
+        };
+        setTimeout(push, 500);
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+  const json = (obj, status = 200) =>
+    new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
+
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (url, init) => {
+    const u = String(url);
+    if (!u.startsWith('https://mock.supportai')) return realFetch(url, init);
+
+    if (u.includes('/chat/config')) {
+      if (scenario === 'v1') return Promise.resolve(json({ error: 'not found' }, 404));
+      return Promise.resolve(json({
+        agentName: persona.brand + (scenario === 'trade' ? '' : ' Support'),
+        color: persona.accent, theme,
+        welcomeMessage: persona.welcome,
+        suggestedQuestions: persona.chips,
+        disclaimer: persona.disclaimer,
+        poweredBy: persona.powered,
+        status: scenario === 'paused' ? 'paused' : 'live',
+      }));
+    }
+    if (u.includes('/chat/start')) {
+      return Promise.resolve(json({
+        sessionId: 'mock-session-' + scenario,
+        agentName: persona.brand + ' Support',
+        color: persona.accent,
+        welcomeMessage: persona.welcome,
+      }));
+    }
+    if (u.includes('/history')) return Promise.resolve(json({ conversation: {}, messages: [] }));
+    if (u.includes('/chat/feedback')) return Promise.resolve(json({ ok: true }));
+    if (u.includes('/chat/escalate')) return Promise.resolve(json({ ok: true }));
+
+    if (u.includes('/chat/message')) {
+      if (scenario === 'limit') return Promise.resolve(json({ error: 'limit' }, 429));
+      if (scenario === 'error') return Promise.reject(new TypeError('network down'));
+      const body = JSON.parse(init.body);
+      const low = body.content.toLowerCase();
+      const hit = persona.qa.find((x) => low.includes(x.q));
+      if (scenario === 'v1') {
+        const text = hit ? hit.a : "I don't have that information in my knowledge base. Would you like me to pass your question to the team?";
+        return new Promise((r) => setTimeout(() => r(json({ response: text })), 900));
+      }
+      const msgId = 'msg-' + Math.random().toString(36).slice(2);
+      if (!hit) {
+        const words = "I don't have that in my knowledge base — can I take your details so the team can follow up?".split(' ');
+        return Promise.resolve(sse([
+          ...words.map((w, i) => ['delta', { text: (i ? ' ' : '') + w }, 45]),
+          ['done', { messageId: msgId, answerStatus: 'not_in_kb', citations: [] }, 10],
+        ]));
+      }
+      const words = hit.a.split(' ');
+      return Promise.resolve(sse([
+        ...words.map((w, i) => ['delta', { text: (i ? ' ' : '') + w }, 40]),
+        ['done', { messageId: msgId, answerStatus: 'answered', citations: [{ title: hit.src, url: 'https://example.com/' + hit.src.toLowerCase().replace(/[^a-z]+/g, '-') }] }, 10],
+      ]));
+    }
+    return realFetch(url, init);
+  };
+
+  const s = document.createElement('script');
+  s.src = './dist/v2.js';
+  s.dataset.agentId = 'preview-agent';
+  s.dataset.apiUrl = 'https://mock.supportai';
+  if (theme === 'dark') s.dataset.theme = 'dark';
+  s.defer = true;
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>
