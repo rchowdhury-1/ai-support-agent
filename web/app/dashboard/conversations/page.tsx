@@ -1,11 +1,15 @@
+'use client';
+
 import Link from 'next/link';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { listConversations } from '@/lib/api';
 import { conversationPill, Pill } from '../../_components/Pill';
 
-export const metadata = { title: 'Conversations — SupportAI' };
-
-export default async function ConversationsPage() {
-  const convos = await listConversations();
+export default function ConversationsPage() {
+  const { data: convos, error } = useData(listConversations);
+  if (error) return <LoadError message={error} />;
+  if (!convos) return <Loading />;
 
   return (
     <section className="fade-up">

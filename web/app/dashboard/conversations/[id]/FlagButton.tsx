@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { flagMessage } from '@/lib/api';
 
-/**
- * The client's safety-valve write action. Local state for now;
- * v2: POST /api/conversations/:id/messages/:idx/flag → operator review queue.
- */
-export function FlagButton() {
+/** The client's safety-valve write action → operator review queue. */
+export function FlagButton({ conversationId, messageIndex }: { conversationId: string; messageIndex: number }) {
   const [flagged, setFlagged] = useState(false);
 
   if (flagged) {
@@ -21,7 +19,10 @@ export function FlagButton() {
   }
   return (
     <button
-      onClick={() => setFlagged(true)}
+      onClick={() => {
+        setFlagged(true);
+        flagMessage(conversationId, messageIndex).catch(() => setFlagged(false));
+      }}
       className="border border-line bg-transparent rounded-full text-[11px] font-bold text-ink2 px-[11px] py-1 cursor-pointer hover:text-bad"
       style={{ transition: 'color .15s, border-color .15s' }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--rd)')}

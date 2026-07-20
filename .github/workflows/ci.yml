@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: supportai_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The app connects as a role WITHOUT superuser/BYPASSRLS so the RLS suite
+      # actually exercises row-level security; migrations run as the owner.
+      DATABASE_URL: postgresql://app_user:app@localhost:5432/supportai_v2_test
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/supportai_v2_test
+      APP_DB_ROLE: app_user
+      JWT_SECRET: ci-jwt-secret-0123456789abcdef0123456789abcdef
+      REFRESH_SECRET: ci-refresh-secret-0123456789abcdef01234567
+      STRIPE_SECRET_KEY: sk_test_dummy_key_for_signature_tests
+      STRIPE_WEBHOOK_SECRET: whsec_test_secret_0123456789abcdef
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Create non-superuser app role
+        run: psql "$MIGRATE_DATABASE_URL" -c "CREATE ROLE app_user LOGIN PASSWORD 'app';"
+      - run: npm run migrate
+      - run: npm test
+
+  widget:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: widget
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: widget/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build

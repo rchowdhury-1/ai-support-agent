@@ -1,8 +1,10 @@
+'use client';
+
 import Link from 'next/link';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { listInsightMonths } from '@/lib/api';
 import { insightPill, Pill } from '../../_components/Pill';
-
-export const metadata = { title: 'Insights — SupportAI' };
 
 function SummaryCard({ label, children, sub }: { label: string; children: React.ReactNode; sub?: string }) {
   return (
@@ -14,12 +16,14 @@ function SummaryCard({ label, children, sub }: { label: string; children: React.
   );
 }
 
-export default async function InsightsPage({
+export default function InsightsPage({
   searchParams,
 }: {
   searchParams: { month?: string };
 }) {
-  const months = await listInsightMonths();
+  const { data: months, error } = useData(listInsightMonths);
+  if (error) return <LoadError message={error} />;
+  if (!months) return <Loading />;
   const idx = Math.max(
     0,
     months.findIndex((m) => m.key === searchParams.month) === -1

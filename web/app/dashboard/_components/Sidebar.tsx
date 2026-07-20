@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ThemeToggle } from '../../_components/ThemeToggle';
+import { logout } from '@/lib/client';
 import type { SessionUser } from '@/lib/types';
 
 export interface NavItem {
@@ -89,7 +90,10 @@ export function Sidebar({ items, user }: { items: NavItem[]; user: SessionUser }
         <div className="flex-1 min-w-0">
           <div className="text-[12.5px] font-bold whitespace-nowrap overflow-hidden text-ellipsis">{user.name}</div>
           <button
-            onClick={() => router.push('/login')}
+            onClick={async () => {
+              await logout();
+              router.push('/login');
+            }}
             className="border-none bg-transparent p-0 text-[11px] text-ink3 hover:text-ink cursor-pointer"
           >
             Sign out

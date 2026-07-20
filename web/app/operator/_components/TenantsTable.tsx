@@ -49,7 +49,7 @@ export function TenantsTable({ tenants }: { tenants: Tenant[] }) {
                 key={t.id}
                 onClick={() =>
                   t.status === 'pending'
-                    ? router.push(`/operator/onboarding?step=${t.onboardingStep ?? 1}`)
+                    ? router.push(`/operator/onboarding?step=${t.onboardingStep ?? 1}&tenant=${t.id}`)
                     : router.push(`/operator/tenants/${t.id}`)
                 }
                 className="grid grid-cols-[2fr_.9fr_.7fr_1.3fr_.7fr_.9fr_1fr] gap-3 items-center w-full px-[18px] py-[13px] border-b border-line bg-transparent text-left cursor-pointer text-ink hover:bg-sunken"

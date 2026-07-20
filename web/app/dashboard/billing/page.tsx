@@ -1,10 +1,14 @@
-import { getBilling } from '@/lib/api';
+'use client';
+
+import { getBilling, openBillingPortal } from '@/lib/api';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { Pill } from '../../_components/Pill';
 
-export const metadata = { title: 'Billing — SupportAI' };
-
-export default async function BillingPage() {
-  const b = await getBilling();
+export default function BillingPage() {
+  const { data: b, error } = useData(getBilling);
+  if (error) return <LoadError message={error} />;
+  if (!b) return <Loading />;
 
   return (
     <section className="fade-up max-w-[760px]">
@@ -45,8 +49,16 @@ export default async function BillingPage() {
             </div>
             <span className="text-[13.5px] font-semibold">{b.cardLine}</span>
           </div>
-          {/* v2: POST /billing/portal → redirect to the Stripe customer portal */}
-          <button className="self-start mt-0.5 px-[15px] py-2.5 border border-line-strong rounded-[10px] bg-transparent text-[13px] font-bold text-ink cursor-pointer hover:text-accent hover:border-accent">
+          <button
+            onClick={async () => {
+              try {
+                window.location.href = await openBillingPortal();
+              } catch {
+                /* no billing account yet — button is decorative until Stripe is attached */
+              }
+            }}
+            className="self-start mt-0.5 px-[15px] py-2.5 border border-line-strong rounded-[10px] bg-transparent text-[13px] font-bold text-ink cursor-pointer hover:text-accent hover:border-accent"
+          >
             Manage payment method ↗
           </button>
           <div className="text-[11.5px] text-ink3">Opens the secure Stripe portal.</div>

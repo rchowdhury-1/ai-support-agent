@@ -1,10 +1,14 @@
+'use client';
+
 import { listEnquiries } from '@/lib/api';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { EnquiryRow } from './EnquiryRow';
 
-export const metadata = { title: 'Enquiries — SupportAI' };
-
-export default async function EnquiriesPage() {
-  const enquiries = await listEnquiries();
+export default function EnquiriesPage() {
+  const { data: enquiries, error } = useData(listEnquiries);
+  if (error) return <LoadError message={error} />;
+  if (!enquiries) return <Loading />;
 
   return (
     <section className="fade-up">

@@ -1,48 +1,60 @@
-import pool from '../db/pool.js';
-import { embedQuery } from './embeddings.js';
+/**
+ * v2 retrieval: pgvector cosine similarity over the chunks table.
+ * Runs on a caller-supplied client so RLS context (withTenant/withSystem)
+ * is always established by the caller — this module never touches the pool.
+ */
+import type { PoolClient } from 'pg';
 import { toSql } from 'pgvector';
 
-const TOP_K = 5;
-const SIMILARITY_THRESHOLD = 0.25;
+export const TOP_K = 5;
+/** Tuned in v1 against text-embedding-3-small: FAQ-style content scores ~0.3-0.4. */
+export const SIMILARITY_THRESHOLD = 0.25;
+/** Best match below this ⇒ "weak retrieval" — answer still attempted, but queued for review. */
+export const WEAK_THRESHOLD = 0.35;
 
 export interface RetrievedChunk {
+  id: string;
   content: string;
-  filename: string;
   similarity: number;
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string | null;
 }
 
-/**
- * Retrieve relevant document chunks for a given agent and query.
- * Returns chunks above the similarity threshold, or an empty array if none match.
- */
-export async function retrieveChunks(agentId: string, query: string): Promise<RetrievedChunk[]> {
-  const queryEmbedding = await embedQuery(query);
-
-  const result = await pool.query(
-    `SELECT dc.content,
-            kd.filename,
-            1 - (dc.embedding <=> $1::vector) AS similarity
-     FROM document_chunks dc
-     JOIN knowledge_documents kd ON kd.id = dc.document_id
-     WHERE kd.agent_id = $2
-       AND kd.status = 'ready'
-     ORDER BY dc.embedding <=> $1::vector
+export async function retrieveChunks(
+  db: PoolClient,
+  agentId: string,
+  queryEmbedding: number[],
+  topK: number = TOP_K
+): Promise<RetrievedChunk[]> {
+  const { rows } = await db.query(
+    `SELECT c.id,
+            c.content,
+            1 - (c.embedding <=> $1::vector) AS similarity,
+            s.id  AS source_id,
+            s.name AS source_name,
+            s.url  AS source_url
+     FROM chunks c
+     JOIN sources s ON s.id = c.source_id
+     WHERE c.agent_id = $2
+       AND s.status IN ('synced', 'drift')
+     ORDER BY c.embedding <=> $1::vector
      LIMIT $3`,
-    [toSql(queryEmbedding), agentId, TOP_K]
+    [toSql(queryEmbedding), agentId, topK]
   );
 
-  return result.rows.filter((row: { similarity: number }) => row.similarity >= SIMILARITY_THRESHOLD);
+  return rows
+    .filter((r: { similarity: number }) => r.similarity >= SIMILARITY_THRESHOLD)
+    .map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      content: r.content as string,
+      similarity: r.similarity as number,
+      sourceId: r.source_id as string,
+      sourceName: r.source_name as string,
+      sourceUrl: (r.source_url as string) ?? null,
+    }));
 }
 
-/**
- * Build the RAG context block to inject into the system prompt.
- */
-export function buildContextBlock(chunks: RetrievedChunk[]): string {
-  if (chunks.length === 0) return '';
-
-  const contextLines = chunks.map(
-    (c, i) => `[${i + 1}] ${c.content}  (source: ${c.filename})`
-  );
-
-  return `\n=== RELEVANT CONTEXT ===\n${contextLines.join('\n\n')}\n========================\n`;
+export function isWeakRetrieval(chunks: RetrievedChunk[]): boolean {
+  return chunks.length > 0 && chunks[0]!.similarity < WEAK_THRESHOLD;
 }

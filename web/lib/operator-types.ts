@@ -14,13 +14,25 @@ export interface Tenant {
   last: string;
   flags: number;
   insights: number;
+  agentId: string | null;
   agentName: string;
+  agentStatus: 'live' | 'paused';
   systemPrompt: string;
+  welcomeMessage: string;
+  suggestedQuestions: string[];
+  allowedOrigins: string[];
   disclaimer: string;
   accent: string;
   caps: { monthly: string; daily: string; session: string };
   /** Pending tenants route to the wizard instead of tenant detail. */
   onboardingStep?: number;
+  /** Detail-endpoint extras (GET /api/admin/tenants/:id). */
+  bars?: number[];
+  tokens?: string;
+  answerRate?: string;
+  avgCostPerConv?: string;
+  monthlyAmountPence?: number;
+  setupFeePence?: number;
 }
 
 export type SourceStatus = 'synced' | 'drift' | 'processing';
@@ -79,16 +91,10 @@ export interface UsageRow {
 }
 
 export interface CrawlPage {
+  /** The page URL — doubles as the ingest identifier. */
   id: string;
   title: string;
   path: string;
   chunks: string;
-  status: 'done' | 'processing' | 'queued' | 'skipped';
-}
-
-export interface SandboxAnswer {
-  text: string;
-  srcLine: string;
-  chunks: Chunk[];
-  meta: string;
+  status: 'queued' | 'skipped';
 }

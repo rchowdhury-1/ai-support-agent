@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { resolveReviewItem } from '@/lib/operator-api';
 import type { ReviewItem, ReviewType } from '@/lib/operator-types';
 import { Pill, reviewTypePill } from '../../_components/Pill';
 import { ChunkPanel } from '../_components/ChunkPanel';
@@ -30,9 +31,20 @@ export function ReviewQueue({ items }: { items: ReviewItem[] }) {
   const openCount = (k: Filter) =>
     items.filter((it) => (k === 'all' || it.type === k) && !resolved[it.id]).length;
   const visible = items.filter((it) => filter === 'all' || it.type === filter);
+  const RES_API: Record<Resolution, 'resolved' | 'content_fix' | 'dismissed'> = {
+    res: 'resolved',
+    fix: 'content_fix',
+    dis: 'dismissed',
+  };
   const resolve = (id: string, r: Resolution) => {
-    setResolved((s) => ({ ...s, [id]: r })); // v2: POST /api/admin/review/:id/resolve
+    setResolved((s) => ({ ...s, [id]: r }));
     setExpanded(null);
+    resolveReviewItem(id, RES_API[r]).catch(() =>
+      setResolved((s) => {
+        const { [id]: _, ...rest } = s;
+        return rest;
+      })
+    );
   };
 
   return (

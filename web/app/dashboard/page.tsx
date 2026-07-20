@@ -1,4 +1,8 @@
+'use client';
+
 import Link from 'next/link';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { getOverview, getSessionUser } from '@/lib/api';
 import { Greeting } from './_components/Greeting';
 
@@ -20,8 +24,14 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
-export default async function OverviewPage() {
-  const [user, o] = await Promise.all([getSessionUser(), getOverview()]);
+export default function OverviewPage() {
+  const { data, error } = useData(async () => {
+    const [user, o] = await Promise.all([getSessionUser(), getOverview()]);
+    return { user, o };
+  });
+  if (error) return <LoadError message={error} />;
+  if (!data) return <Loading />;
+  const { user, o } = data;
 
   return (
     <section className="fade-up">

@@ -1,183 +1,210 @@
-import { Router, Request, Response } from 'express';
+/**
+ * Stripe billing. One subscription per tenant, created from an
+ * operator-generated payment link (no self-serve plans/tiers). The webhook is
+ * idempotent via the webhook_events table: the Stripe event id is the primary
+ * key, so a redelivered event no-ops.
+ */
+import { Router, type Request, type Response } from 'express';
 import Stripe from 'stripe';
-import pool from '../db/pool.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
-
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-06-24.dahlia' }) : null;
-
-const PRICE_TO_PLAN: Record<string, string> = {
-  [process.env.STRIPE_STARTER_PRICE_ID || '']: 'starter',
-  [process.env.STRIPE_PRO_PRICE_ID || '']: 'pro',
-  [process.env.STRIPE_BUSINESS_PRICE_ID || '']: 'business',
-};
+import { z } from 'zod';
+import { requireClient, requireOperator, type AuthedRequest } from '../middleware/auth.js';
+import { withSystem } from '../db/tenant.js';
 
 const router = Router();
 
-function requireStripe(_req: Request, res: Response): boolean {
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+function requireStripe(res: Response): Stripe | null {
   if (!stripe) {
     res.status(503).json({ error: 'Billing is not configured' });
-    return false;
+    return null;
   }
-  return true;
+  return stripe;
 }
 
-// Create checkout session (protected)
-router.post('/checkout', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (!requireStripe(req, res)) return;
-  try {
-    const { priceId } = req.body;
-    if (!priceId) {
-      res.status(400).json({ error: 'priceId is required' });
-      return;
-    }
+// ── POST /billing/webhook (public, signature-verified, idempotent) ───────
 
-    const userResult = await pool.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.userId]);
-    const user = userResult.rows[0];
-
-    let customerId = user.stripe_customer_id;
-    if (!customerId) {
-      const customer = await stripe!.customers.create({ email: user.email });
-      customerId = customer.id;
-      await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, req.userId]);
-    }
-
-    const session = await stripe!.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${process.env.CLIENT_URL}/dashboard?billing=success`,
-      cancel_url: `${process.env.CLIENT_URL}/dashboard?billing=cancelled`,
-      metadata: { userId: req.userId! },
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('Checkout error:', err);
-    const message = err instanceof Error ? err.message : 'Failed to create checkout session';
-    res.status(500).json({ error: message });
+router.post('/webhook', async (req: Request, res: Response) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    res.status(503).json({ error: 'Billing is not configured' });
+    return;
   }
-});
-
-// Get subscription details (protected)
-router.get('/subscription', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userResult = await pool.query(
-      'SELECT plan, stripe_subscription_id, monthly_message_count, message_count_reset_at FROM users WHERE id = $1',
-      [req.userId]
-    );
-    const user = userResult.rows[0];
-
-    let subscription = null;
-    if (user.stripe_subscription_id && stripe) {
-      try {
-        subscription = await stripe.subscriptions.retrieve(user.stripe_subscription_id);
-      } catch {
-        // Subscription may have been deleted
-      }
-    }
-
-    res.json({
-      plan: user.plan,
-      monthlyMessageCount: user.monthly_message_count,
-      messageCountResetAt: user.message_count_reset_at,
-      subscription: subscription ? {
-        status: subscription.status,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      } : null,
-    });
-  } catch (err) {
-    console.error('Subscription error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Create customer portal session (protected)
-router.post('/portal', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (!requireStripe(req, res)) return;
-  try {
-    const userResult = await pool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.userId]);
-    const customerId = userResult.rows[0]?.stripe_customer_id;
-
-    if (!customerId) {
-      res.status(400).json({ error: 'No billing account found' });
-      return;
-    }
-
-    const session = await stripe!.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${process.env.CLIENT_URL}/dashboard`,
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('Portal error:', err);
-    res.status(500).json({ error: 'Failed to create portal session' });
-  }
-});
-
-// Stripe webhook (public, verified by signature)
-router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
-  if (!requireStripe(req, res)) return;
-  const sig = req.headers['stripe-signature'] as string;
-
   let event: Stripe.Event;
   try {
-    event = stripe!.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '');
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err);
+    event = stripe.webhooks.constructEvent(
+      req.body as Buffer,
+      req.headers['stripe-signature'] as string,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch {
     res.status(400).json({ error: 'Invalid signature' });
     return;
   }
 
   try {
+    // Idempotency gate: first delivery wins, replays no-op.
+    const inserted = await withSystem((db) =>
+      db.query(
+        `INSERT INTO webhook_events (id, type, payload) VALUES ($1, $2, $3)
+         ON CONFLICT (id) DO NOTHING`,
+        [event.id, event.type, JSON.stringify(event.data.object)]
+      )
+    );
+    if (inserted.rowCount === 0) {
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        const subscriptionId = session.subscription as string;
-        const customerId = session.customer as string;
-
-        // Get subscription to find the price/plan
-        const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
-        const priceId = subscription.items.data[0]?.price.id;
-        const plan = PRICE_TO_PLAN[priceId] || 'starter';
-
-        await pool.query(
-          `UPDATE users SET plan = $1, stripe_subscription_id = $2, stripe_customer_id = $3
-           WHERE id = $4 OR stripe_customer_id = $3`,
-          [plan, subscriptionId, customerId, session.metadata?.userId]
-        );
-        break;
-      }
-
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
-        const priceId = subscription.items.data[0]?.price.id;
-        const plan = PRICE_TO_PLAN[priceId] || 'free';
-
-        if (subscription.status === 'active') {
-          await pool.query(
-            'UPDATE users SET plan = $1 WHERE stripe_subscription_id = $2',
-            [plan, subscription.id]
+        const tenantId = session.metadata?.tenant_id;
+        if (tenantId) {
+          await withSystem((db) =>
+            db.query(
+              `UPDATE tenants
+               SET status = 'active', stripe_customer_id = $2, stripe_subscription_id = $3,
+                   onboarding_step = NULL, updated_at = NOW()
+               WHERE id = $1`,
+              [tenantId, String(session.customer ?? ''), String(session.subscription ?? '')]
+            )
           );
         }
         break;
       }
-
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription;
-        await pool.query(
-          'UPDATE users SET plan = $1, stripe_subscription_id = NULL WHERE stripe_subscription_id = $2',
-          ['free', subscription.id]
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as Stripe.Subscription;
+        const status =
+          sub.status === 'active' || sub.status === 'trialing'
+            ? 'active'
+            : sub.status === 'past_due' || sub.status === 'unpaid'
+              ? 'past_due'
+              : 'paused';
+        await withSystem((db) =>
+          db.query(
+            `UPDATE tenants SET status = $2, updated_at = NOW() WHERE stripe_subscription_id = $1`,
+            [sub.id, status]
+          )
         );
         break;
       }
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as Stripe.Subscription;
+        await withSystem((db) =>
+          db.query(
+            `UPDATE tenants SET status = 'paused', updated_at = NOW() WHERE stripe_subscription_id = $1`,
+            [sub.id]
+          )
+        );
+        break;
+      }
+      default:
+        break;
     }
 
+    await withSystem((db) =>
+      db.query(`UPDATE webhook_events SET processed_at = NOW() WHERE id = $1`, [event.id])
+    );
     res.json({ received: true });
   } catch (err) {
-    console.error('Webhook processing error:', err);
+    console.error('webhook error:', err);
     res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// ── POST /billing/portal (client) ────────────────────────────────────────
+
+router.post('/portal', requireClient, async (req: AuthedRequest, res: Response) => {
+  const s = requireStripe(res);
+  if (!s) return;
+  try {
+    const { rows } = await withSystem((db) =>
+      db.query(`SELECT stripe_customer_id FROM tenants WHERE id = $1`, [req.auth!.tenantId])
+    );
+    const customerId = rows[0]?.stripe_customer_id;
+    if (!customerId) {
+      res.status(404).json({ error: 'No billing account on file' });
+      return;
+    }
+    const session = await s.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${process.env.CLIENT_URL || 'http://localhost:3141'}/dashboard/billing`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('portal error:', err);
+    res.status(500).json({ error: 'Could not open the billing portal' });
+  }
+});
+
+// ── POST /billing/payment-link (operator) ────────────────────────────────
+
+const paymentLinkSchema = z.object({
+  tenantId: z.string().uuid(),
+  monthlyAmountPence: z.number().int().min(100),
+  setupFeePence: z.number().int().min(0).default(0),
+});
+
+router.post('/payment-link', requireOperator, async (req: AuthedRequest, res: Response) => {
+  const s = requireStripe(res);
+  if (!s) return;
+  const parsed = paymentLinkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'tenantId and monthlyAmountPence are required' });
+    return;
+  }
+  try {
+    const p = parsed.data;
+    const { rows } = await withSystem((db) =>
+      db.query(`SELECT name, contact_email FROM tenants WHERE id = $1`, [p.tenantId])
+    );
+    if (!rows[0]) {
+      res.status(404).json({ error: 'Tenant not found' });
+      return;
+    }
+
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: 'gbp',
+          product_data: { name: `SupportAI — ${rows[0].name} (monthly)` },
+          recurring: { interval: 'month' },
+          unit_amount: p.monthlyAmountPence,
+        },
+        quantity: 1,
+      },
+    ];
+    if (p.setupFeePence > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'gbp',
+          product_data: { name: 'One-off set-up' },
+          unit_amount: p.setupFeePence,
+        },
+        quantity: 1,
+      });
+    }
+
+    const session = await s.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: lineItems,
+      metadata: { tenant_id: p.tenantId },
+      subscription_data: { metadata: { tenant_id: p.tenantId } },
+      customer_email: rows[0].contact_email || undefined,
+      success_url: `${process.env.CLIENT_URL || 'http://localhost:3141'}/login?paid=1`,
+      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:3141'}/`,
+    });
+
+    await withSystem((db) =>
+      db.query(
+        `UPDATE tenants SET monthly_amount_pence = $2, setup_fee_pence = $3, updated_at = NOW() WHERE id = $1`,
+        [p.tenantId, p.monthlyAmountPence, p.setupFeePence]
+      )
+    );
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('payment link error:', err);
+    res.status(500).json({ error: 'Could not create the payment link' });
   }
 });
 
