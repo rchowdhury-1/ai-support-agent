@@ -9,10 +9,10 @@ const AGENT_ID =
 
 /**
  * Mounts the real widget artifact inline (operator live preview). Cleans up on
- * unmount so navigating between tenants doesn't leak instances. Points at the
- * live demo agent; v2: per-tenant agent id + accent from the tenant record.
+ * unmount so navigating between tenants doesn't leak instances. Defaults to
+ * the demo agent; pass agentId for a per-tenant preview.
  */
-export function InlineWidget({ accent }: { accent?: string }) {
+export function InlineWidget({ accent, agentId }: { accent?: string; agentId?: string }) {
   useEffect(() => {
     document.getElementById('supportai-widget')?.remove();
     document.getElementById('sai-preview-script')?.remove();
@@ -20,7 +20,7 @@ export function InlineWidget({ accent }: { accent?: string }) {
     s.id = 'sai-preview-script';
     s.src = '/widget/v2.js';
     s.defer = true;
-    s.dataset.agentId = AGENT_ID;
+    s.dataset.agentId = agentId || AGENT_ID;
     s.dataset.apiUrl = API_URL;
     s.dataset.mode = 'inline';
     s.dataset.container = '#sai-preview';
@@ -30,7 +30,7 @@ export function InlineWidget({ accent }: { accent?: string }) {
       document.getElementById('supportai-widget')?.remove();
       document.getElementById('sai-preview-script')?.remove();
     };
-  }, [accent]);
+  }, [accent, agentId]);
 
   return <div id="sai-preview" className="w-full h-[430px]" />;
 }

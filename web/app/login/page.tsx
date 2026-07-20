@@ -3,20 +3,31 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { login } from '@/lib/client';
 
 /**
- * Client sign-in from the approved design. No auth backend yet — the form
- * navigates straight to the demo dashboard. v2: POST /auth/login (httpOnly
- * refresh cookie per the architecture), then redirect.
+ * Sign in against the live backend: POST /auth/login sets the httpOnly
+ * refresh cookie; the access token stays in memory. Clients land on the
+ * dashboard, the operator on /operator.
  */
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    router.push('/dashboard');
+    setError(null);
+    setBusy(true);
+    try {
+      const user = await login(email, password);
+      router.push(user.role === 'operator' ? '/operator' : '/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed');
+      setBusy(false);
+    }
   };
 
   return (
@@ -58,11 +69,17 @@ export default function LoginPage() {
                 className="px-[13px] py-[11px] border border-line rounded-[10px] bg-page text-ink text-sm outline-none focus:border-accent"
               />
             </label>
+            {error ? (
+              <div className="text-[12.5px] font-semibold" style={{ color: 'var(--r, #b3261e)' }}>
+                {error}
+              </div>
+            ) : null}
             <button
               type="submit"
-              className="mt-1.5 py-[13px] border-none rounded-[11px] bg-accent text-accent-ink text-[14.5px] font-bold cursor-pointer hover:brightness-110"
+              disabled={busy}
+              className="mt-1.5 py-[13px] border-none rounded-[11px] bg-accent text-accent-ink text-[14.5px] font-bold cursor-pointer hover:brightness-110 disabled:opacity-60"
             >
-              Sign in
+              {busy ? 'Signing in…' : 'Sign in'}
             </button>
             <a href="#forgot" className="text-[13px] text-center text-ink2 no-underline mt-0.5">
               Forgotten your password?

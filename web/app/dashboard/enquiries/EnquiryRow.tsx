@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { setEnquiryStatus } from '@/lib/api';
 import type { Enquiry, EnquiryStatus } from '@/lib/types';
 import { enquiryPill, Pill } from '../../_components/Pill';
 
-/**
- * The client's one other write: advancing an enquiry New → Contacted → Closed.
- * Local state for now; v2: PUT /api/enquiries/:id/status.
- */
+/** The client's one other write: advancing an enquiry New → Contacted → Closed. */
 export function EnquiryRow({ enquiry }: { enquiry: Enquiry }) {
   const [status, setStatus] = useState<EnquiryStatus>(enquiry.status);
   const pill = enquiryPill[status];
@@ -28,7 +26,11 @@ export function EnquiryRow({ enquiry }: { enquiry: Enquiry }) {
       <Pill tone={pill.tone}>{pill.label}</Pill>
       {status !== 'closed' ? (
         <button
-          onClick={() => setStatus(status === 'new' ? 'contacted' : 'closed')}
+          onClick={() => {
+            const next = status === 'new' ? 'contacted' : 'closed';
+            setStatus(next);
+            setEnquiryStatus(enquiry.id, next).catch(() => setStatus(status));
+          }}
           className="flex-none border border-line bg-transparent rounded-[9px] text-xs font-bold text-ink2 px-[13px] py-[7px] cursor-pointer hover:text-accent"
           onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--a)')}
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--b)')}

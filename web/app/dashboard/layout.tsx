@@ -1,8 +1,9 @@
-import type { Metadata } from 'next';
-import { getNavBadges, getSessionUser } from '@/lib/api';
-import { NavChips, Sidebar, type NavItem } from './_components/Sidebar';
+'use client';
 
-export const metadata: Metadata = { title: 'Dashboard — SupportAI' };
+import { getNavBadges, getSessionUser } from '@/lib/api';
+import { useData } from '@/lib/use-data';
+import { Loading } from '@/lib/ui-state';
+import { NavChips, Sidebar, type NavItem } from './_components/Sidebar';
 
 // Icon paths from the approved design.
 const ICONS = {
@@ -14,20 +15,26 @@ const ICONS = {
   billing: 'M2 7.5A2.5 2.5 0 0 1 4.5 5h15A2.5 2.5 0 0 1 22 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 16.5zM2 10h20',
 };
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [user, badges] = await Promise.all([getSessionUser(), getNavBadges()]);
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { data } = useData(async () => {
+    const user = await getSessionUser();
+    const badges = await getNavBadges().catch(() => ({ insights: 0, enquiries: 0 }));
+    return { user, badges };
+  });
+
+  if (!data) return <Loading />;
 
   const items: NavItem[] = [
     { key: 'overview', label: 'Overview', href: '/dashboard', icon: ICONS.overview },
-    { key: 'insights', label: 'Insights', href: '/dashboard/insights', icon: ICONS.insights, badge: badges.insights || undefined },
+    { key: 'insights', label: 'Insights', href: '/dashboard/insights', icon: ICONS.insights, badge: data.badges.insights || undefined },
     { key: 'conversations', label: 'Conversations', href: '/dashboard/conversations', icon: ICONS.conversations },
-    { key: 'enquiries', label: 'Enquiries', href: '/dashboard/enquiries', icon: ICONS.enquiries, badge: badges.enquiries || undefined },
+    { key: 'enquiries', label: 'Enquiries', href: '/dashboard/enquiries', icon: ICONS.enquiries, badge: data.badges.enquiries || undefined },
     { key: 'billing', label: 'Billing', href: '/dashboard/billing', icon: ICONS.billing },
   ];
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar items={items} user={user} />
+      <Sidebar items={items} user={data.user} />
       <main className="flex-1 min-w-0 px-[clamp(18px,3.4vw,44px)] pb-16">
         <NavChips items={items} />
         {children}

@@ -1,47 +1,62 @@
+'use client';
+
 /**
- * Client-dashboard data layer.
- *
- * MOCK ADAPTER: currently serves the demo dataset so the dashboard is fully
- * navigable before the v2 backend exists. Each function's signature matches
- * the v2 API contract from the approved architecture — replacing the bodies
- * with `fetch` calls (and deleting lib/demo-data.ts) is the entire swap.
+ * Client-dashboard data layer — live v2 backend via the same-origin
+ * /api proxy (see next.config.mjs rewrites). Shapes per lib/types.ts.
  */
-import {
-  demoBilling,
-  demoConversations,
-  demoEnquiries,
-  demoInsightMonths,
-  demoOverview,
-  demoUser,
-} from './demo-data';
+import { apiFetch, ensureSession } from './client';
 import type { Billing, Conversation, Enquiry, InsightMonth, Overview, SessionUser } from './types';
 
 export async function getSessionUser(): Promise<SessionUser> {
-  return demoUser; // v2: GET /api/me
+  return ensureSession();
 }
 
 export async function getOverview(): Promise<Overview> {
-  return demoOverview; // v2: GET /api/overview
+  return apiFetch('/api/overview');
 }
 
 export async function listConversations(): Promise<Conversation[]> {
-  return demoConversations; // v2: GET /api/conversations
+  return apiFetch('/api/conversations');
 }
 
 export async function getConversation(id: string): Promise<Conversation | undefined> {
-  return demoConversations.find((c) => c.id === id); // v2: GET /api/conversations/:id
+  try {
+    return await apiFetch(`/api/conversations/${id}`);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('not found')) return undefined;
+    throw err;
+  }
+}
+
+export async function flagMessage(conversationId: string, messageIndex: number): Promise<void> {
+  await apiFetch(`/api/conversations/${conversationId}/messages/${messageIndex}/flag`, {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 export async function listInsightMonths(): Promise<InsightMonth[]> {
-  return demoInsightMonths; // v2: GET /api/insights
+  return apiFetch('/api/insights');
 }
 
 export async function getBilling(): Promise<Billing> {
-  return demoBilling; // v2: GET /api/billing
+  return apiFetch('/api/billing');
+}
+
+export async function openBillingPortal(): Promise<string> {
+  const d = await apiFetch<{ url: string }>('/billing/portal', { method: 'POST', body: '{}' });
+  return d.url;
 }
 
 export async function listEnquiries(): Promise<Enquiry[]> {
-  return demoEnquiries; // v2: GET /api/enquiries
+  return apiFetch('/api/enquiries');
+}
+
+export async function setEnquiryStatus(id: string, status: Enquiry['status']): Promise<void> {
+  await apiFetch(`/api/enquiries/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
 }
 
 /** Badge counts for the sidebar, derived from data (not hardcoded). */
@@ -49,7 +64,7 @@ export async function getNavBadges(): Promise<{ insights: number; enquiries: num
   const [months, enquiries] = await Promise.all([listInsightMonths(), listEnquiries()]);
   const latest = months[months.length - 1];
   return {
-    insights: latest.rows.filter((r) => r.status === 'new').length,
+    insights: latest ? latest.rows.filter((r) => r.status === 'new').length : 0,
     enquiries: enquiries.filter((e) => e.status === 'new').length,
   };
 }

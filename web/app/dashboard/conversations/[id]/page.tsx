@@ -1,10 +1,11 @@
+'use client';
+
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { getConversation } from '@/lib/api';
+import { useData } from '@/lib/use-data';
+import { LoadError, Loading } from '@/lib/ui-state';
 import { conversationPill, Pill } from '../../../_components/Pill';
 import { FlagButton } from './FlagButton';
-
-export const metadata = { title: 'Conversation — SupportAI' };
 
 const DocIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -19,9 +20,12 @@ const ThumbDownIcon = () => (
   </svg>
 );
 
-export default async function ConversationDetailPage({ params }: { params: { id: string } }) {
-  const convo = await getConversation(params.id);
-  if (!convo) notFound();
+export default function ConversationDetailPage({ params }: { params: { id: string } }) {
+  const { data, error } = useData(() => getConversation(params.id), [params.id]);
+  if (error) return <LoadError message={error} />;
+  if (data === undefined) return <Loading />;
+  const convo = data;
+  if (!convo) return <LoadError message="Conversation not found" />;
   const pill = conversationPill[convo.status];
 
   return (
@@ -34,7 +38,7 @@ export default async function ConversationDetailPage({ params }: { params: { id:
           <h1 className="m-0 text-[22px] font-bold tracking-[-.02em] flex-1 min-w-[220px]">{convo.who}</h1>
           <Pill tone={pill.tone}>{pill.label}</Pill>
         </div>
-        <div className="text-[12.5px] text-ink3 mt-1.5">{convo.time} · via bramptonhale.co.uk</div>
+        <div className="text-[12.5px] text-ink3 mt-1.5">{convo.time}</div>
       </header>
 
       <div className="bg-surface border border-line rounded-2xl p-[22px] flex flex-col gap-3.5">
@@ -72,7 +76,7 @@ export default async function ConversationDetailPage({ params }: { params: { id:
                   </span>
                 ) : null}
                 <span className="flex-1" />
-                <FlagButton />
+                <FlagButton conversationId={convo.id} messageIndex={i} />
               </div>
             </div>
           )

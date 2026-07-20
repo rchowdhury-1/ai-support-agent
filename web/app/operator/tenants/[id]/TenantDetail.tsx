@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { demoUsageBars } from '@/lib/operator-data';
+import {
+  pauseAgent,
+  refreshSource,
+  resumeAgent,
+  sendPaymentLink,
+  triageInsight,
+  updateAgent,
+  addSiteSources,
+  addTextSource,
+} from '@/lib/operator-api';
 import type { OpConversation, Source, Tenant, TriageItem } from '@/lib/operator-types';
 import { Pill, sourcePill, tenantPill } from '../../../_components/Pill';
 import { InlineWidget } from '../../_components/InlineWidget';
@@ -39,18 +48,61 @@ export function TenantDetail({
   drift,
   conversations,
   triage,
+  onChanged,
 }: {
   tenant: Tenant;
   sources: Source[];
   drift: string | null;
   conversations: OpConversation[];
   triage: TriageItem[];
+  onChanged: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('Agent');
-  const [paused, setPaused] = useState(tenant.status === 'paused');
+  const [paused, setPaused] = useState(tenant.agentStatus === 'paused');
   const [confirming, setConfirming] = useState(false);
   const [refreshing, setRefreshing] = useState<Record<string, boolean>>({});
   const [triageState, setTriageState] = useState<Record<string, 'rev' | 'add' | 'dis'>>({});
+  const [agentName, setAgentName] = useState(tenant.agentName);
+  const [systemPrompt, setSystemPrompt] = useState(tenant.systemPrompt);
+  const [disclaimer, setDisclaimer] = useState(tenant.disclaimer);
+  const [model, setModel] = useState<'haiku' | 'sonnet'>(tenant.model === 'Sonnet' ? 'sonnet' : 'haiku');
+  const [capMonthly, setCapMonthly] = useState(tenant.caps.monthly.replace(/,/g, ''));
+  const [capDaily, setCapDaily] = useState(tenant.caps.daily.replace(/,/g, ''));
+  const [capSession, setCapSession] = useState(tenant.caps.session.replace(/,/g, ''));
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const save = async () => {
+    setSaving('saving');
+    try {
+      await updateAgent(tenant.id, {
+        agentName,
+        systemPrompt,
+        disclaimer,
+        model,
+        monthlyCap: parseInt(capMonthly, 10) || 0,
+        dailyCap: parseInt(capDaily, 10) || 0,
+        sessionCap: parseInt(capSession, 10) || 0,
+      });
+      setSaving('saved');
+      setTimeout(() => setSaving('idle'), 1500);
+    } catch {
+      setSaving('idle');
+    }
+  };
+
+  const addSource = async () => {
+    const url = window.prompt('Page URL to ingest (or leave blank to paste text):');
+    if (url) {
+      await addSiteSources(tenant.id, [url]).catch(() => undefined);
+    } else {
+      const name = window.prompt('Name for the pasted text source:');
+      if (!name) return;
+      const text = window.prompt('Paste the text content:');
+      if (!text) return;
+      await addTextSource(tenant.id, name, text).catch(() => undefined);
+    }
+    onChanged();
+  };
 
   const status = paused ? 'paused' : tenant.status === 'paused' ? 'active' : tenant.status;
   const pill = tenantPill[status];
@@ -101,36 +153,45 @@ export function TenantDetail({
         <div className="pt-[18px] grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           <div className={`${card} flex flex-col gap-[13px]`}>
             <div className="text-[13.5px] font-bold">Agent configuration</div>
-            <label className={label}>Agent name<input className={input} defaultValue={tenant.agentName} /></label>
+            <label className={label}>Agent name<input className={input} value={agentName} onChange={(e) => setAgentName(e.target.value)} /></label>
             <label className={label}>
               System prompt
-              <textarea rows={6} className={`${input} font-mono text-[11px] leading-[1.6] resize-y`} defaultValue={tenant.systemPrompt} />
+              <textarea rows={6} className={`${input} font-mono text-[11px] leading-[1.6] resize-y`} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
             </label>
             <div className="flex gap-2 flex-wrap items-center">
               <span className="text-[11.5px] font-bold text-ink2">Model</span>
-              <span className="text-[11.5px] font-bold rounded-full px-[11px] py-1" style={{ border: '1px solid var(--a)', color: 'var(--a)', background: 'var(--asf)' }}>
-                {tenant.model} ✓
-              </span>
-              <span className="text-[11.5px] font-bold border border-line text-ink2 rounded-full px-[11px] py-1">
-                {tenant.model === 'Haiku' ? 'Sonnet' : 'Haiku'}
-              </span>
+              {(['haiku', 'sonnet'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setModel(m)}
+                  className="text-[11.5px] font-bold rounded-full px-[11px] py-1 cursor-pointer bg-transparent"
+                  style={
+                    model === m
+                      ? { border: '1px solid var(--a)', color: 'var(--a)', background: 'var(--asf)' }
+                      : { border: '1px solid var(--b)', color: 'var(--t2)' }
+                  }
+                >
+                  {m === 'haiku' ? 'Haiku' : 'Sonnet'}
+                  {model === m ? ' ✓' : ''}
+                </button>
+              ))}
               <span className="w-px h-[18px] bg-line" />
               <span className="text-[11.5px] font-bold text-ink2">Accent</span>
               <span className="w-[22px] h-[22px] rounded-[7px]" style={{ background: tenant.accent, border: '2px solid var(--t)' }} />
               <span className="w-[22px] h-[22px] rounded-[7px]" style={{ background: '#1F3A5F' }} />
               <span className="w-[22px] h-[22px] rounded-[7px]" style={{ background: '#6E3B2A' }} />
             </div>
-            <label className={label}>Disclaimer<input className={input} defaultValue={tenant.disclaimer} /></label>
+            <label className={label}>Disclaimer<input className={input} value={disclaimer} onChange={(e) => setDisclaimer(e.target.value)} /></label>
             <div className="grid grid-cols-3 gap-2">
-              {[['MONTHLY CAP', tenant.caps.monthly], ['DAILY', tenant.caps.daily], ['PER SESSION', tenant.caps.session]].map(([capLabel, v]) => (
+              {([['MONTHLY CAP', capMonthly, setCapMonthly], ['DAILY', capDaily, setCapDaily], ['PER SESSION', capSession, setCapSession]] as const).map(([capLabel, v, set]) => (
                 <label key={capLabel} className="flex flex-col gap-1 text-[10px] font-bold text-ink3">
                   {capLabel}
-                  <input className={`${input} px-2.5 py-2 text-xs`} defaultValue={v} />
+                  <input className={`${input} px-2.5 py-2 text-xs`} value={v} onChange={(e) => set(e.target.value)} />
                 </label>
               ))}
             </div>
-            <button className="self-start px-4 py-[9px] border-none rounded-[9px] bg-accent text-accent-ink text-[12.5px] font-bold cursor-pointer hover:brightness-110">
-              Save changes
+            <button onClick={save} className="self-start px-4 py-[9px] border-none rounded-[9px] bg-accent text-accent-ink text-[12.5px] font-bold cursor-pointer hover:brightness-110">
+              {saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved ✓' : 'Save changes'}
             </button>
           </div>
 
@@ -163,7 +224,10 @@ export function TenantDetail({
                   All widgets are in contact-form mode. Enquiries still land in the client&rsquo;s dashboard.
                 </div>
                 <button
-                  onClick={() => setPaused(false)}
+                  onClick={async () => {
+                    setPaused(false);
+                    await resumeAgent(tenant.id).catch(() => setPaused(true));
+                  }}
                   className="px-4 py-[9px] border-none rounded-[9px] bg-accent text-accent-ink text-[12.5px] font-bold cursor-pointer hover:brightness-110"
                 >
                   Resume agent
@@ -172,9 +236,9 @@ export function TenantDetail({
             )}
             <div className={card}>
               <div className="text-[13.5px] font-bold mb-2.5">Live widget preview</div>
-              <InlineWidget accent={tenant.accent} />
+              <InlineWidget accent={tenant.accent} agentId={tenant.agentId ?? undefined} />
               <div className="text-[10.5px] text-ink3 mt-2">
-                Previewing against the live demo agent — per-tenant preview arrives with the v2 backend.
+                Live preview against this tenant&rsquo;s own agent.
               </div>
             </div>
           </div>
@@ -185,7 +249,7 @@ export function TenantDetail({
       {tab === 'Sources' && (
         <div className="pt-[18px]">
           <div className="flex justify-end mb-3">
-            <button className="px-[15px] py-[9px] border-none rounded-[9px] bg-accent text-accent-ink text-[12.5px] font-bold cursor-pointer hover:brightness-110">
+            <button onClick={addSource} className="px-[15px] py-[9px] border-none rounded-[9px] bg-accent text-accent-ink text-[12.5px] font-bold cursor-pointer hover:brightness-110">
               + Add source
             </button>
           </div>
@@ -211,7 +275,12 @@ export function TenantDetail({
                     <span className="text-[11.5px] text-ink3">{refreshing[src.id] ? 'refreshing…' : src.synced}</span>
                     <span className="text-right">
                       <button
-                        onClick={() => setRefreshing((r) => ({ ...r, [src.id]: true }))}
+                        onClick={() => {
+                          setRefreshing((r) => ({ ...r, [src.id]: true }));
+                          refreshSource(src.id)
+                            .then(() => setTimeout(onChanged, 4000))
+                            .catch(() => setRefreshing((r) => ({ ...r, [src.id]: false })));
+                        }}
                         className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-[11px] py-[5px] cursor-pointer hover:text-accent hover:border-accent"
                       >
                         {effective === 'processing' ? 'Refreshing…' : src.status === 'drift' ? 'Review & refresh' : 'Refresh'}
@@ -293,9 +362,9 @@ export function TenantDetail({
                   </div>
                   <Pill tone={pillDef.tone}>{pillDef.label}</Pill>
                   <div className="flex gap-[5px]">
-                    <button onClick={() => setTriageState((s) => ({ ...s, [t.id]: 'rev' }))} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-accent hover:border-accent">Reviewed</button>
-                    <button onClick={() => setTriageState((s) => ({ ...s, [t.id]: 'add' }))} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-good hover:border-good">Content added</button>
-                    <button onClick={() => setTriageState((s) => ({ ...s, [t.id]: 'dis' }))} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-bad hover:border-bad">Dismiss</button>
+                    <button onClick={() => { setTriageState((s) => ({ ...s, [t.id]: 'rev' })); triageInsight(t.id, 'reviewed').catch(() => undefined); }} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-accent hover:border-accent">Reviewed</button>
+                    <button onClick={() => { setTriageState((s) => ({ ...s, [t.id]: 'add' })); triageInsight(t.id, 'added').catch(() => undefined); }} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-good hover:border-good">Content added</button>
+                    <button onClick={() => { setTriageState((s) => ({ ...s, [t.id]: 'dis' })); triageInsight(t.id, 'dismissed').catch(() => undefined); }} className="border border-line rounded-lg bg-transparent text-ink2 text-[11px] font-bold px-2.5 py-[5px] cursor-pointer hover:text-bad hover:border-bad">Dismiss</button>
                   </div>
                 </div>
               );
@@ -323,15 +392,15 @@ export function TenantDetail({
               <div>
                 <div className="text-[11px] text-ink3">Spend</div>
                 <div className="font-serif font-semibold text-2xl">{tenant.cost}</div>
-                <div className="text-[10.5px] text-ink3">2.4M tokens</div>
+                <div className="text-[10.5px] text-ink3">{tenant.tokens ?? '—'} tokens</div>
               </div>
               <div>
                 <div className="text-[11px] text-ink3">Avg / conversation</div>
-                <div className="font-serif font-semibold text-2xl">£0.011</div>
+                <div className="font-serif font-semibold text-2xl">{tenant.avgCostPerConv ?? '—'}</div>
               </div>
               <div>
                 <div className="text-[11px] text-ink3">Answer rate</div>
-                <div className="font-serif font-semibold text-2xl text-good">91%</div>
+                <div className="font-serif font-semibold text-2xl text-good">{tenant.answerRate ?? '—'}</div>
               </div>
             </div>
             <div>
@@ -349,12 +418,12 @@ export function TenantDetail({
           <div className={card}>
             <div className="text-[13.5px] font-bold mb-3.5">Daily messages</div>
             <div className="flex items-end gap-1 h-[90px]">
-              {demoUsageBars.map((v, i) => (
+              {(tenant.bars ?? []).map((v, i) => (
                 <div key={i} className="flex-1 rounded-t-[3px] bg-accent opacity-85" style={{ height: `${v}%` }} />
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-ink3 mt-1.5">
-              <span>6 Jul</span><span>19 Jul</span>
+              <span>14 days ago</span><span>today</span>
             </div>
           </div>
         </div>
@@ -366,27 +435,39 @@ export function TenantDetail({
           <div className={`${card} flex flex-col gap-[11px]`}>
             <div className="flex justify-between items-center">
               <span className="text-[13.5px] font-bold">Stripe subscription</span>
-              <Pill tone="good">Active</Pill>
+              <Pill tone={tenant.status === 'active' ? 'good' : tenant.status === 'past_due' ? 'bad' : 'warn'}>
+                {tenant.status === 'active' ? 'Active' : tenant.status === 'past_due' ? 'Past due' : tenant.status === 'pending' ? 'Awaiting payment' : 'Paused'}
+              </Pill>
             </div>
-            <div className="flex justify-between text-[12.5px]"><span className="text-ink2">Monthly</span><strong>£99 / month</strong></div>
-            <div className="flex justify-between text-[12.5px]"><span className="text-ink2">Next invoice</span><strong>1 Aug 2026</strong></div>
-            <div className="flex justify-between text-[12.5px]"><span className="text-ink2">Card</span><strong>Visa •••• 4242</strong></div>
-            <button className="self-start mt-1 px-3.5 py-2 border border-line-strong rounded-[9px] bg-transparent text-ink text-xs font-bold cursor-pointer hover:text-accent hover:border-accent">
-              Open in Stripe ↗
+            <div className="flex justify-between text-[12.5px]">
+              <span className="text-ink2">Monthly</span>
+              <strong>{tenant.monthlyAmountPence ? `£${(tenant.monthlyAmountPence / 100).toFixed(0)} / month` : 'Not set'}</strong>
+            </div>
+            <div className="flex justify-between text-[12.5px]">
+              <span className="text-ink2">Set-up fee</span>
+              <strong>{tenant.setupFeePence ? `£${(tenant.setupFeePence / 100).toFixed(0)}` : '—'}</strong>
+            </div>
+            <button
+              onClick={async () => {
+                const monthly = window.prompt('Monthly amount in £:', tenant.monthlyAmountPence ? String(tenant.monthlyAmountPence / 100) : '99');
+                if (!monthly) return;
+                const setup = window.prompt('One-off set-up fee in £ (0 for none):', tenant.setupFeePence ? String(tenant.setupFeePence / 100) : '500');
+                if (setup === null) return;
+                try {
+                  const url = await sendPaymentLink(tenant.id, Math.round(Number(monthly) * 100), Math.round(Number(setup) * 100));
+                  window.prompt('Payment link (send this to the client):', url);
+                } catch (err) {
+                  window.alert(err instanceof Error ? err.message : 'Could not create the link');
+                }
+              }}
+              className="self-start mt-1 px-3.5 py-2 border border-line-strong rounded-[9px] bg-transparent text-ink text-xs font-bold cursor-pointer hover:text-accent hover:border-accent"
+            >
+              {tenant.status === 'pending' ? 'Create payment link' : 'New payment link'} ↗
             </button>
           </div>
-          <div className="bg-surface border border-line rounded-[14px] px-5 py-1.5">
-            <div className="py-[13px] text-[13.5px] font-bold">Payment history</div>
-            {[
-              ['1 Jul 2026 — monthly', '£99 paid'],
-              ['1 Jun 2026 — monthly', '£99 paid'],
-              ['12 Mar 2026 — setup', '£500 paid'],
-            ].map(([row, amount]) => (
-              <div key={row} className="flex justify-between gap-2.5 py-2.5 border-t border-line text-[12.5px]">
-                <span>{row}</span>
-                <span className="text-good font-bold">{amount}</span>
-              </div>
-            ))}
+          <div className="bg-surface border border-line rounded-[14px] px-5 py-4 text-[12.5px] text-ink2 leading-relaxed">
+            Invoices and payment history live in the Stripe dashboard — the subscription status
+            here updates automatically from Stripe webhooks.
           </div>
         </div>
       )}
@@ -419,7 +500,11 @@ export function TenantDetail({
                 Keep running
               </button>
               <button
-                onClick={() => { setConfirming(false); setPaused(true); }}
+                onClick={async () => {
+                  setConfirming(false);
+                  setPaused(true);
+                  await pauseAgent(tenant.id).catch(() => setPaused(false));
+                }}
                 className="px-4 py-2.5 border-none rounded-[10px] text-[13px] font-bold cursor-pointer hover:brightness-110"
                 style={{ background: 'var(--rd)', color: '#FBF6EE' }}
               >

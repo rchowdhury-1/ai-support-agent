@@ -129,14 +129,59 @@ router.get('/tenants', async (_req: AuthedRequest, res: Response) => {
 
 router.get('/tenants/:id', async (req: AuthedRequest, res: Response) => {
   try {
-    const { rows } = await withSystem((db) =>
-      db.query(`${TENANT_LIST_SQL} WHERE t.id = $1`, [req.params.id])
-    );
-    if (!rows[0]) {
+    const detail = await withSystem(async (db) => {
+      const { rows } = await db.query(`${TENANT_LIST_SQL} WHERE t.id = $1`, [req.params.id]);
+      if (!rows[0]) return null;
+      const bars = await db.query(
+        `SELECT d::date AS day, COALESCE(SUM(u.messages), 0)::int AS n
+         FROM generate_series(CURRENT_DATE - 13, CURRENT_DATE, '1 day') d
+         LEFT JOIN usage_daily u ON u.day = d::date AND u.tenant_id = $1
+         GROUP BY d ORDER BY d`,
+        [req.params.id]
+      );
+      const usage = await db.query(
+        `SELECT COALESCE(SUM(tokens_in + tokens_out), 0)::bigint AS tokens
+         FROM usage_daily WHERE tenant_id = $1 AND day >= date_trunc('month', CURRENT_DATE)`,
+        [req.params.id]
+      );
+      const answers = await db.query(
+        `SELECT count(*) FILTER (WHERE answer_status IN ('answered','partial'))::int AS good,
+                count(*) FILTER (WHERE answer_status IS NOT NULL)::int AS total
+         FROM messages WHERE tenant_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)`,
+        [req.params.id]
+      );
+      const amounts = await db.query(
+        `SELECT monthly_amount_pence, setup_fee_pence FROM tenants WHERE id = $1`,
+        [req.params.id]
+      );
+      return { row: rows[0], bars: bars.rows, usage: usage.rows[0], answers: answers.rows[0], amounts: amounts.rows[0] };
+    });
+    if (!detail) {
       res.status(404).json({ error: 'Tenant not found' });
       return;
     }
-    res.json(toTenantDto(rows[0] as TenantListRow));
+    const barMax = Math.max(...detail.bars.map((b: { n: number }) => b.n), 1);
+    const t = detail.row as TenantListRow;
+    const convCount = await withSystem((db) =>
+      db.query(
+        `SELECT count(*)::int AS n FROM conversations
+         WHERE tenant_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)`,
+        [req.params.id]
+      )
+    );
+    const conversations = convCount.rows[0].n as number;
+    res.json({
+      ...toTenantDto(t),
+      bars: detail.bars.map((b: { n: number }) => Math.round((b.n / barMax) * 100)),
+      tokens: tokensShort(Number(detail.usage.tokens)),
+      answerRate:
+        detail.answers.total > 0
+          ? `${Math.round((detail.answers.good / detail.answers.total) * 100)}%`
+          : '—',
+      avgCostPerConv: conversations > 0 ? gbp(usdToGbp(t.cost_usd) / conversations) : '—',
+      monthlyAmountPence: detail.amounts.monthly_amount_pence,
+      setupFeePence: detail.amounts.setup_fee_pence,
+    });
   } catch (err) {
     console.error('tenant error:', err);
     res.status(500).json({ error: 'Internal server error' });
