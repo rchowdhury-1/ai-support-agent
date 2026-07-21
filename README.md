@@ -1,179 +1,122 @@
-# SupportAI — AI Customer Support Platform
+# SupportAI — done-for-you AI support agents for small businesses
 
-A full-stack SaaS platform where businesses sign up, configure an AI support agent, and embed a chat widget on their website. The AI uses OpenAI (`gpt-4o-mini`) for answer generation and RAG-powered retrieval from uploaded knowledge-base documents.
+SupportAI puts an AI chat widget on a small business's website that answers customers' questions using **only that business's own content** — crawled web pages, PDFs and pasted documents. Every answer is grounded by retrieval, carries citations, and when the agent doesn't know, it says so honestly and captures the visitor's details instead. Unanswered questions accumulate into a monthly **insight report**: "here's what your customers asked that your website couldn't answer."
 
-## Tech Stack
+It is **not self-serve SaaS**. It's a service run by one operator: clients are onboarded through an operator wizard (crawl → tune → sandbox-test → embed → payment link), get a mostly read-only dashboard, and pay a setup fee plus a monthly subscription. There is no public registration anywhere.
 
-- **Frontend**: React + TypeScript + Tailwind CSS + Vite
-- **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL (Supabase)
-- **AI**: OpenAI API (`gpt-4o-mini` generation + `text-embedding-3-small` embeddings)
-- **Auth**: JWT + httpOnly cookie refresh tokens
-- **Email**: Resend
-- **Deploy**: Netlify (frontend) + Render (backend)
+**Live:** [supportai-web-rc-1.vercel.app](https://supportai-web-rc-1.vercel.app) (marketing + dashboards) · [supportai-api-rc-1.vercel.app](https://supportai-api-rc-1.vercel.app) (API)
 
-## Project Structure
+## Architecture (v2)
+
+```
+┌────────────────────────────┐      ┌─────────────────────────────┐
+│  web/  — Next.js 14        │──────▶  backend/ — Express (TS)    │
+│  marketing site            │proxy │  Vercel serverless           │
+│  client dashboard          │/auth │  ├─ /chat/*      widget API  │
+│  operator dashboard        │/api  │  ├─ /api/*       client API  │
+│  (Vercel: supportai-web)   │/bill │  ├─ /api/admin/* operator    │
+└────────────────────────────┘      │  ├─ /auth/*      sessions    │
+┌────────────────────────────┐      │  └─ /billing/*   Stripe      │
+│  widget/ — 27KB Shadow-DOM │──────▶  (Vercel: supportai-api)    │
+│  IIFE, SSE streaming,      │      └──────────────┬──────────────┘
+│  citations, feedback,      │                     │
+│  polite failure states     │      ┌──────────────▼──────────────┐
+└────────────────────────────┘      │  Neon Postgres + pgvector   │
+                                    │  row-level security FORCEd  │
+   Anthropic (generation)           │  on every tenant table      │
+   OpenAI (embeddings)              └─────────────────────────────┘
+   Stripe (per-tenant billing)
+```
+
+- **Generation**: Anthropic (`claude-haiku-4-5` or `claude-sonnet-5`, selectable per agent). One structured call returns `answer`, `status`, `question_type` and `citations` together; the answer streams to the widget as SSE deltas, and citations are validated server-side against the retrieved chunk set — the model cannot invent a source.
+- **Retrieval**: OpenAI `text-embedding-3-small` + pgvector cosine similarity (HNSW). Weak retrievals and thumbs-downs feed an operator review queue; unanswerable questions are embedding-grouped into insights.
+- **Tenant isolation**: Postgres RLS, `FORCE`d on every tenant-scoped table, driven by transaction-local settings via `withTenant()` / `withSystem()` wrappers. The app connects as a dedicated role *without* `BYPASSRLS` (Neon's default owner role silently bypasses RLS). A query that forgets tenant scoping returns zero rows — enforced by the test suite.
+- **Widget safety**: `/chat/*` is origin-bound per agent (`agents.allowed_origins`, matched origin echoed, never `*`). Caps and billing-state checks run *after* session authz and **fail closed** into 402/429, which the widget renders as a polite contact form — never a broken state. Escalation is a plain DB write that works with the LLM down.
+- **Auth**: no registration. 15-minute access JWT held in memory only; opaque rotated refresh token (SHA-256 at rest) in an `httpOnly Secure SameSite=Lax` cookie scoped to `/auth`. Token reuse revokes the whole family. The web app proxies `/auth`, `/api` and `/billing` same-origin so the Lax cookie works.
+- **Billing**: operator-generated Stripe payment links (subscription + one-off setup); webhook idempotency via a `webhook_events` table keyed by Stripe event id — redeliveries no-op.
+
+## Repository layout
 
 ```
 ai-support-agent/
-├── backend/          # Express API
-│   ├── src/
-│   │   ├── db/       # Pool + migrations
-│   │   ├── middleware/  # JWT auth
-│   │   ├── routes/   # auth, agents, chat, conversations, dashboard
-│   │   ├── services/ # OpenAI API wrapper
-│   │   └── index.ts  # App entry point
-│   ├── .env.example
-│   └── package.json
-├── frontend/         # React app
-│   ├── src/
-│   │   ├── components/
-│   │   ├── hooks/    # useAuth
-│   │   ├── lib/      # Axios instance
-│   │   ├── pages/    # All pages
-│   │   └── types/    # TypeScript types
-│   ├── .env.example
-│   └── package.json
-├── widget/
-│   └── widget.js     # Standalone embeddable widget
-└── README.md
+├── backend/        # v2 API — Express + TS, deployed serverless on Vercel
+│   ├── src/db/         # pool, RLS wrappers, boot guard, migrations, seed
+│   ├── src/routes/     # auth, chat (widget), client, admin, billing
+│   ├── src/services/   # retrieval, generation, embeddings, chunker, crawler, ingestion
+│   └── src/**/*.test.ts  # 86 tests — tenant-isolation suite is the priority
+├── web/            # v2 frontend — Next.js 14 App Router + Tailwind
+│   ├── app/            # marketing, /login, /dashboard/*, /operator/*
+│   └── lib/            # client fetch layer (in-memory token + silent refresh)
+├── widget/         # embeddable widget (TS → single IIFE artifact)
+├── frontend/       # LEGACY v1 SPA (React+Vite) — frozen, still deployed
+└── .github/workflows/ci.yml
 ```
 
-## Local Setup
+## The widget
 
-### 1. Database (Supabase)
-
-1. Create a project at [supabase.com](https://supabase.com)
-2. Get your connection string from Project Settings → Database → Connection string
-3. Run migrations (step 4 below)
-
-### 2. Backend
-
-```bash
-cd backend
-cp .env.example .env
-# Fill in your .env values (see below)
-npm install
-npm run migrate       # Creates all DB tables
-npm run dev           # Starts on http://localhost:5000
-```
-
-**Backend `.env`**:
-```
-DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
-OPENAI_API_KEY=sk-...
-CLIENT_URL=http://localhost:5173
-PORT=5000
-NODE_ENV=development
-RESEND_API_KEY=re_...   # Optional, for email features
-```
-
-### 3. Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-# Set VITE_API_URL=http://localhost:5000
-npm install
-npm run dev           # Starts on http://localhost:5173
-```
-
-**Frontend `.env`**:
-```
-VITE_API_URL=http://localhost:5000
-```
-
-### 4. Run migrations
-
-```bash
-cd backend
-npm run migrate
-```
-
-## Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Landing page with live demo widget |
-| `/register` | Sign up |
-| `/login` | Sign in |
-| `/dashboard` | Stats overview |
-| `/dashboard/agents` | Manage agents |
-| `/dashboard/agents/:id` | Configure agent + live preview |
-| `/dashboard/conversations` | All conversations |
-| `/dashboard/conversations/:id` | Full message thread |
-
-## API Routes
-
-### Auth
-- `POST /auth/register` — Create account
-- `POST /auth/login` — Sign in
-- `POST /auth/refresh` — Refresh access token (uses httpOnly cookie)
-- `POST /auth/logout` — Clear session
-
-### Agents (requires Bearer token)
-- `GET /agents` — List user's agents
-- `POST /agents` — Create agent
-- `PUT /agents/:id` — Update agent
-- `DELETE /agents/:id` — Delete agent
-- `GET /agents/:id/embed` — Get embed code
-
-### Chat (public — used by widget)
-- `POST /chat/start` — Start conversation, returns sessionId
-- `POST /chat/message` — Send message, calls OpenAI, returns response
-- `GET /chat/:sessionId/history` — Load conversation history
-
-### Conversations (requires Bearer token)
-- `GET /conversations` — All conversations (optional `?status=open|closed|escalated`)
-- `GET /conversations/:id` — Single conversation with messages
-- `PUT /conversations/:id/status` — Update status
-
-### Dashboard (requires Bearer token)
-- `GET /dashboard/stats` — Stats + recent conversations
-
-## Embeddable Widget
-
-Paste this into any website's `<body>`:
+Paste before `</body>` on any site (the operator wizard generates this per tenant):
 
 ```html
-<script src="https://your-domain.com/widget.js" data-agent-id="YOUR_AGENT_ID" defer></script>
+<script src="https://supportai-web-rc-1.vercel.app/widget/v2.js"
+  data-agent-id="AGENT_ID"
+  data-api-url="https://supportai-api-rc-1.vercel.app"
+  defer></script>
 ```
 
-- Self-contained, no external dependencies
-- Persists session across page refreshes via localStorage
-- Mobile responsive
-- Typing indicator while AI responds
-- Loads conversation history on return visits
+Shadow-DOM isolated, per-brand accent/theme, SSE-streamed answers with "From: …" source lines, 👍/👎 feedback, session restore, suggested-question chips, configurable disclaimer, and designed degraded states (paused agent, cap reached, API down → contact form). Speaks the v2 SSE protocol with a transparent v1 JSON fallback via content negotiation.
+
+## Local development
+
+Prereqs: Node 20+, a Neon project (or any Postgres 16 with pgvector).
+
+```bash
+cd backend
+cp .env.example .env        # fill in — see the file for every variable
+npm install
+npm run migrate             # numbered SQL migrations, tracked in schema_migrations
+npm run seed                # operator login + demo tenant (needs OPENAI_API_KEY)
+npm run dev                 # tsx watch, http://localhost:5001
+
+cd ../web
+npm install
+BACKEND_URL=http://localhost:5001 npm run dev   # http://localhost:3141
+
+cd ../widget
+npm install && npm run build && npm test
+```
+
+**Safety rails:** the backend refuses to boot or migrate against a production database unless explicitly configured (`PROD_DB_HOSTS` + `NODE_ENV=production`, migrations additionally need `MIGRATE_PROD=1`), and the v1 production endpoint is hard-refused always. Use separate Neon branches for dev/test/prod. Migrations run as the table owner; the app runs as the restricted `APP_DB_ROLE`.
+
+### Tests
+
+```bash
+cd backend && npm test      # 86 tests: RLS isolation, auth rotation/reuse,
+                            # chat contract + SSE, caps fail-closed,
+                            # authz-before-quota, webhook idempotency,
+                            # retrieval ranking, ingestion lifecycle
+```
+
+CI runs the backend suite against a pgvector container **as a non-superuser role** (so RLS is actually exercised), plus widget build+tests and the web build, on every push.
+
+## API surface
+
+| Area | Routes | Auth |
+|---|---|---|
+| Widget | `GET /chat/config` · `POST /chat/start` · `POST /chat/message` (SSE) · `GET /chat/:sessionId/history` · `POST /chat/feedback` · `POST /chat/escalate` | public, origin-bound per agent |
+| Sessions | `POST /auth/login` · `/refresh` · `/logout` (no register) | refresh cookie |
+| Client dashboard | `GET /api/me·overview·conversations[/:id]·insights·enquiries·billing` · `PUT /api/enquiries/:id/status` · `POST /api/conversations/:id/messages/:idx/flag` | client JWT |
+| Operator | `/api/admin/tenants` CRUD + agent config, pause/resume, crawl, sources (site/text/PDF), refresh, drift, sandbox, insights triage, review queue, usage, client-user provisioning | operator JWT |
+| Billing | `POST /billing/payment-link` (operator) · `POST /billing/portal` (client) · `POST /billing/webhook` (Stripe, signed + idempotent) | mixed |
+
+`/chat/message` SSE protocol: `event: delta` → `{"text": …}` increments, then `event: done` → `{messageId, answerStatus, citations}`. Clients without `Accept: text/event-stream` get the v1-compatible single JSON response.
 
 ## Deployment
 
-### Backend (Render)
-1. Create a new Web Service on [render.com](https://render.com)
-2. Connect your repo, set root to `backend/`
-3. Build command: `npm install && npm run build`
-4. Start command: `npm start`
-5. Add all environment variables
+Both apps deploy from `main` via Vercel Git integration:
 
-### Frontend (Netlify)
-1. Create a new site on [netlify.com](https://netlify.com)
-2. Connect your repo, set base directory to `frontend/`
-3. Build command: `npm run build`
-4. Publish directory: `dist`
-5. Add env variable: `VITE_API_URL=https://your-render-backend.onrender.com`
+| Project | Root | Notes |
+|---|---|---|
+| `supportai-api` | `backend/` | Native Vercel Express entrypoint (`index.mjs`) over an esbuild-prebuilt `dist/`; ingestion is awaited in-request (serverless kills post-response work) |
+| `supportai-web` | `web/` | `BACKEND_URL` env drives the same-origin proxy rewrites; `NEXT_PUBLIC_DEMO_AGENT_ID` powers the live hero demo |
 
-### Widget
-After deploying the frontend, update `API_URL` in `widget/widget.js` to point to your production backend URL.
-
-## AI Integration
-
-Every chat message:
-1. Loads full conversation history from PostgreSQL
-2. Embeds the query and retrieves relevant knowledge-base chunks via pgvector
-3. Builds messages array with history + retrieved context
-4. Sends to OpenAI `gpt-4o-mini` with the agent's custom system prompt
-5. Saves user message + AI response to DB
-6. Returns AI response to widget
-
-The system prompt is fully customizable per agent, letting businesses define their AI's persona, knowledge, and behavior. When the knowledge base doesn't cover a question, the agent gracefully declines and offers to capture the question as a lead.
+Database migrations are run manually against the production owner URL (`MIGRATE_PROD=1 npm run migrate`). The legacy v1 stack (`frontend/` + Render backend + old Neon branch) remains frozen and live for the original landing-page demo; v2 replaced its API entirely.
