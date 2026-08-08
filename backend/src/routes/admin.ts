@@ -26,7 +26,8 @@ import { bytesShort, dayMonth, gbp, relTime, thousands, tokensShort, usdToGbp } 
 const router = Router();
 router.use(requireOperator);
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB — PDF source uploads
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 const MODEL_LABEL = { haiku: 'Haiku', sonnet: 'Sonnet' } as const;
 

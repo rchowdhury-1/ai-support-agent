@@ -25,6 +25,9 @@ function tenantId(req: AuthedRequest): string {
   return req.auth!.tenantId!;
 }
 
+// The overview sparkline's fixed vertical ceiling (see /overview).
+const SPARKLINE_CEILING = 16;
+
 // ── GET /api/me ──────────────────────────────────────────────────────────
 
 router.get(
@@ -82,12 +85,14 @@ router.get(
     });
 
     const rate = data.msgs.total > 0 ? Math.round((data.msgs.answered / data.msgs.total) * 100) : 100;
-    // The overview sparkline renders against a fixed ceiling of 16 — scale
-    // busier days down rather than letting the path clip.
+    // The overview sparkline renders against a fixed ceiling — scale busier
+    // days down rather than letting the path clip.
     const rawSpark: number[] = data.spark.map((r: { n: number }) => r.n);
     const sparkMax = Math.max(...rawSpark, 0);
     const spark =
-      sparkMax > 16 ? rawSpark.map((n) => Math.round((n / sparkMax) * 16)) : rawSpark;
+      sparkMax > SPARKLINE_CEILING
+        ? rawSpark.map((n) => Math.round((n / sparkMax) * SPARKLINE_CEILING))
+        : rawSpark;
 
     res.json({
       rangeLabel: monthLabel(monthKey()),

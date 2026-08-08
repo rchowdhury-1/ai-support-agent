@@ -208,6 +208,10 @@ async function resolveSession(sessionId: string): Promise<SessionCtx | null> {
   return { id: conversation_id, messages_count, agent: agent as AgentRow };
 }
 
+// A single conversation may hold up to this multiple of the per-session cap
+// (user + assistant messages) before it is refused — headroom for a long chat.
+const SESSION_CAP_BURST_MULTIPLIER = 2;
+
 /**
  * Cap enforcement. Runs strictly AFTER session ownership is resolved.
  * Fails CLOSED: any error counts as capped — the widget's polite fallback,
@@ -217,7 +221,7 @@ async function checkCaps(ctx: SessionCtx): Promise<{ ok: true } | { ok: false; s
   try {
     const a = ctx.agent;
     if (a.status === 'paused' || a.tenant_status !== 'active') return { ok: false, status: 402 };
-    if (ctx.messages_count >= a.session_cap * 2) return { ok: false, status: 429 };
+    if (ctx.messages_count >= a.session_cap * SESSION_CAP_BURST_MULTIPLIER) return { ok: false, status: 429 };
 
     const { rows } = await withTenant(a.tenant_id, (db) =>
       db.query(
@@ -243,6 +247,109 @@ const messageSchema = z.object({
 });
 
 const INSIGHT_SIMILARITY = 0.85;
+// Characters of each retrieved chunk stored as operator-facing telemetry.
+const TELEMETRY_EXCERPT_CHARS = 200;
+// Insight questions are truncated to the `insights.question` column budget.
+const INSIGHT_QUESTION_MAX_CHARS = 500;
+
+type Citation = { title: string; url?: string };
+
+/** Map generation citation indices back to their sources, deduped by title. */
+function buildCitations(result: GenerationResult, chunks: RetrievedChunk[]): Citation[] {
+  const seenTitles = new Set<string>();
+  return result.citations
+    .map((i) => chunks[i - 1])
+    .filter((c): c is RetrievedChunk => Boolean(c))
+    .map((c) => ({ title: c.sourceName, ...(c.sourceUrl ? { url: c.sourceUrl } : {}) }))
+    .filter((c) => (seenTitles.has(c.title) ? false : (seenTitles.add(c.title), true)));
+}
+
+/** Operator-facing retrieval telemetry stored alongside each answer. */
+function buildRetrievalTelemetry(chunks: RetrievedChunk[]) {
+  return chunks.map((c) => ({
+    src: c.sourceName,
+    sim: Number(c.similarity.toFixed(3)),
+    excerpt: c.content.slice(0, TELEMETRY_EXCERPT_CHARS),
+  }));
+}
+
+/** Persist the assistant message, advance the conversation, and meter usage. */
+async function persistAssistantTurn(opts: {
+  tenantId: string;
+  conversationId: string;
+  agent: AgentRow;
+  result: GenerationResult;
+  citations: Citation[];
+  telemetry: ReturnType<typeof buildRetrievalTelemetry>;
+}): Promise<string> {
+  const { tenantId, conversationId, agent, result, citations, telemetry } = opts;
+  return withTenant(tenantId, async (db) => {
+    const { rows } = await db.query(
+      `INSERT INTO messages (tenant_id, conversation_id, role, content, answer_status,
+                             question_type, citations, retrieval, tokens_in, tokens_out)
+       VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        tenantId,
+        conversationId,
+        result.answer,
+        result.status,
+        result.questionType,
+        JSON.stringify(citations),
+        JSON.stringify(telemetry),
+        result.tokensIn,
+        result.tokensOut,
+      ]
+    );
+    const newStatus = result.status === 'not_in_kb' ? 'no_answer' : 'answered';
+    await db.query(
+      `UPDATE conversations
+       SET messages_count = messages_count + 2, last_message_at = NOW(),
+           status = CASE WHEN status = 'escalated' THEN status ELSE $2 END
+       WHERE id = $1`,
+      [conversationId, newStatus]
+    );
+    await db.query(
+      `INSERT INTO usage_daily (tenant_id, agent_id, day, messages, tokens_in, tokens_out, cost_usd)
+       VALUES ($1, $2, CURRENT_DATE, 1, $3, $4, $5)
+       ON CONFLICT (tenant_id, agent_id, day) DO UPDATE
+       SET messages = usage_daily.messages + 1,
+           tokens_in = usage_daily.tokens_in + EXCLUDED.tokens_in,
+           tokens_out = usage_daily.tokens_out + EXCLUDED.tokens_out,
+           cost_usd = usage_daily.cost_usd + EXCLUDED.cost_usd`,
+      [tenantId, agent.id, result.tokensIn, result.tokensOut, result.costUsd]
+    );
+    return rows[0].id as string;
+  });
+}
+
+/**
+ * Feed the learning loop (best-effort — never fails the response):
+ * unanswered questions become insights; weak-but-answered ones become
+ * review-queue items.
+ */
+async function recordSignals(opts: {
+  tenantId: string;
+  agent: AgentRow;
+  question: string;
+  embedding: number[];
+  chunks: RetrievedChunk[];
+  result: GenerationResult;
+  messageId: string;
+}): Promise<void> {
+  const { tenantId, agent, question, embedding, chunks, result, messageId } = opts;
+  if (result.status === 'not_in_kb') {
+    await recordInsight(tenantId, agent.id, question, embedding).catch((err) =>
+      console.error('insight error:', err)
+    );
+  } else if (isWeakRetrieval(chunks)) {
+    await withTenant(tenantId, (db) =>
+      db.query(`INSERT INTO review_items (tenant_id, type, message_id) VALUES ($1, 'weak', $2)`, [
+        tenantId,
+        messageId,
+      ])
+    ).catch((err) => console.error('review item error:', err));
+  }
+}
 
 router.post('/message', async (req: Request, res: Response): Promise<void> => {
   const parsed = messageSchema.safeParse(req.body);
@@ -322,74 +429,24 @@ router.post('/message', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const citations = result.citations
-      .map((i) => chunks[i - 1])
-      .filter((c): c is RetrievedChunk => Boolean(c))
-      .map((c) => ({ title: c.sourceName, ...(c.sourceUrl ? { url: c.sourceUrl } : {}) }));
-    // Dedupe by title, preserving order.
-    const seenTitles = new Set<string>();
-    const dedupedCitations = citations.filter((c) =>
-      seenTitles.has(c.title) ? false : (seenTitles.add(c.title), true)
-    );
-
-    const retrievalTelemetry = chunks.map((c) => ({
-      src: c.sourceName,
-      sim: Number(c.similarity.toFixed(3)),
-      excerpt: c.content.slice(0, 200),
-    }));
-
-    const messageId = await withTenant(tenantId, async (db) => {
-      const { rows } = await db.query(
-        `INSERT INTO messages (tenant_id, conversation_id, role, content, answer_status,
-                               question_type, citations, retrieval, tokens_in, tokens_out)
-         VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [
-          tenantId,
-          ctx.id,
-          result.answer,
-          result.status,
-          result.questionType,
-          JSON.stringify(dedupedCitations),
-          JSON.stringify(retrievalTelemetry),
-          result.tokensIn,
-          result.tokensOut,
-        ]
-      );
-      const newStatus = result.status === 'not_in_kb' ? 'no_answer' : 'answered';
-      await db.query(
-        `UPDATE conversations
-         SET messages_count = messages_count + 2, last_message_at = NOW(),
-             status = CASE WHEN status = 'escalated' THEN status ELSE $2 END
-         WHERE id = $1`,
-        [ctx.id, newStatus]
-      );
-      await db.query(
-        `INSERT INTO usage_daily (tenant_id, agent_id, day, messages, tokens_in, tokens_out, cost_usd)
-         VALUES ($1, $2, CURRENT_DATE, 1, $3, $4, $5)
-         ON CONFLICT (tenant_id, agent_id, day) DO UPDATE
-         SET messages = usage_daily.messages + 1,
-             tokens_in = usage_daily.tokens_in + EXCLUDED.tokens_in,
-             tokens_out = usage_daily.tokens_out + EXCLUDED.tokens_out,
-             cost_usd = usage_daily.cost_usd + EXCLUDED.cost_usd`,
-        [tenantId, agent.id, result.tokensIn, result.tokensOut, result.costUsd]
-      );
-      return rows[0].id as string;
+    const dedupedCitations = buildCitations(result, chunks);
+    const messageId = await persistAssistantTurn({
+      tenantId,
+      conversationId: ctx.id,
+      agent,
+      result,
+      citations: dedupedCitations,
+      telemetry: buildRetrievalTelemetry(chunks),
     });
-
-    // Unanswered questions become insights (the monthly-report raw material)
-    // and, when retrieval was weak but answered, review-queue items.
-    if (result.status === 'not_in_kb') {
-      await recordInsight(tenantId, agent.id, content, queryEmbedding).catch((err) =>
-        console.error('insight error:', err)
-      );
-    } else if (isWeakRetrieval(chunks)) {
-      await withTenant(tenantId, (db) =>
-        db.query(
-          `INSERT INTO review_items (tenant_id, type, message_id) VALUES ($1, 'weak', $2)`,
-          [tenantId, messageId]
-        )
-      ).catch((err) => console.error('review item error:', err));
-    }
+    await recordSignals({
+      tenantId,
+      agent,
+      question: content,
+      embedding: queryEmbedding,
+      chunks,
+      result,
+      messageId,
+    });
 
     const meta = {
       messageId,
@@ -440,7 +497,7 @@ async function recordInsight(
       const inserted = await db.query(
         `INSERT INTO insights (tenant_id, agent_id, month, question, embedding)
          VALUES ($1, $2, $3, $4, $5::vector) RETURNING id`,
-        [tenantId, agentId, month, question.slice(0, 500), toSql(embedding)]
+        [tenantId, agentId, month, question.slice(0, INSIGHT_QUESTION_MAX_CHARS), toSql(embedding)]
       );
       await db.query(
         `INSERT INTO review_items (tenant_id, type, insight_id) VALUES ($1, 'insight', $2)`,
