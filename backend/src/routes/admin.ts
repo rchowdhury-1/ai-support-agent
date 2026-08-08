@@ -9,6 +9,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { requireOperator, type AuthedRequest } from '../middleware/auth.js';
 import { withSystem, withTenant } from '../db/tenant.js';
+import { asyncHandler } from '../lib/http.js';
 import { crawlSite } from '../services/crawler.js';
 import {
   createSource,
@@ -117,18 +118,17 @@ function toTenantDto(t: TenantListRow) {
   };
 }
 
-router.get('/tenants', async (_req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/tenants',
+  asyncHandler(async (_req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) => db.query(`${TENANT_LIST_SQL} ORDER BY t.created_at ASC`));
     res.json(rows.map((r) => toTenantDto(r as TenantListRow)));
-  } catch (err) {
-    console.error('tenants error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.get('/tenants/:id', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/tenants/:id',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const detail = await withSystem(async (db) => {
       const { rows } = await db.query(`${TENANT_LIST_SQL} WHERE t.id = $1`, [req.params.id]);
       if (!rows[0]) return null;
@@ -182,11 +182,8 @@ router.get('/tenants/:id', async (req: AuthedRequest, res: Response) => {
       monthlyAmountPence: detail.amounts.monthly_amount_pence,
       setupFeePence: detail.amounts.setup_fee_pence,
     });
-  } catch (err) {
-    console.error('tenant error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 const createTenantSchema = z.object({
   name: z.string().min(1).max(255),
@@ -195,13 +192,14 @@ const createTenantSchema = z.object({
   contactEmail: z.string().max(255).default(''),
 });
 
-router.post('/tenants', async (req: AuthedRequest, res: Response) => {
-  const parsed = createTenantSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Tenant name is required' });
-    return;
-  }
-  try {
+router.post(
+  '/tenants',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = createTenantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Tenant name is required' });
+      return;
+    }
     const p = parsed.data;
     const result = await withSystem(async (db) => {
       const t = await db.query(
@@ -221,11 +219,8 @@ router.post('/tenants', async (req: AuthedRequest, res: Response) => {
       return { tenantId: t.rows[0].id, agentId: a.rows[0].id };
     });
     res.status(201).json(result);
-  } catch (err) {
-    console.error('create tenant error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 const agentUpdateSchema = z.object({
   agentName: z.string().min(1).max(255).optional(),
@@ -244,13 +239,14 @@ const agentUpdateSchema = z.object({
   onboardingStep: z.number().int().min(1).max(6).nullable().optional(),
 });
 
-router.put('/tenants/:id/agent', async (req: AuthedRequest, res: Response) => {
-  const parsed = agentUpdateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid payload' });
-    return;
-  }
-  try {
+router.put(
+  '/tenants/:id/agent',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = agentUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid payload' });
+      return;
+    }
     const p = parsed.data;
     const ok = await withSystem(async (db) => {
       const { rows } = await db.query(
@@ -305,11 +301,8 @@ router.put('/tenants/:id/agent', async (req: AuthedRequest, res: Response) => {
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('agent update error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 /** The kill switch: paused flips every widget for the tenant to contact-form mode. */
 router.post('/tenants/:id/pause', (req, res) => setAgentStatus(req, res, 'paused'));
@@ -341,13 +334,14 @@ const clientUserSchema = z.object({
 });
 
 /** Provision the client's dashboard login — no self-serve registration exists. */
-router.post('/tenants/:id/client-user', async (req: AuthedRequest, res: Response) => {
-  const parsed = clientUserSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'name, email and a 10+ char password are required' });
-    return;
-  }
-  try {
+router.post(
+  '/tenants/:id/client-user',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = clientUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'name, email and a 10+ char password are required' });
+      return;
+    }
     const hash = await bcrypt.hash(parsed.data.password, 12);
     const { rows } = await withSystem((db) =>
       db.query(
@@ -363,11 +357,8 @@ router.post('/tenants/:id/client-user', async (req: AuthedRequest, res: Response
       return;
     }
     res.status(201).json({ id: rows[0].id });
-  } catch (err) {
-    console.error('client user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Ingestion: crawl, sources ────────────────────────────────────────────
 
@@ -408,13 +399,14 @@ const sourcesSchema = z.union([
   z.object({ kind: z.literal('text'), name: z.string().min(1).max(255), text: z.string().min(1) }),
 ]);
 
-router.post('/tenants/:id/sources', async (req: AuthedRequest, res: Response) => {
-  const parsed = sourcesSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid source payload' });
-    return;
-  }
-  try {
+router.post(
+  '/tenants/:id/sources',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = sourcesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid source payload' });
+      return;
+    }
     const ta = await tenantAgent(req.params.id!);
     if (!ta) {
       res.status(404).json({ error: 'Tenant has no agent' });
@@ -438,11 +430,8 @@ router.post('/tenants/:id/sources', async (req: AuthedRequest, res: Response) =>
       await refreshSource(sourceId).catch((err) => console.error('ingest error:', err));
     }
     res.status(202).json({ sourceIds: ids });
-  } catch (err) {
-    console.error('sources error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 router.post(
   '/tenants/:id/sources/pdf',
@@ -477,8 +466,9 @@ router.post(
 
 const SOURCE_TYPE_LABEL = { site: 'Web page', pdf: 'PDF', text: 'Text' } as const;
 
-router.get('/tenants/:id/sources', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/tenants/:id/sources',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT s.id, s.kind, s.name, s.status, s.size_bytes, s.last_synced_at, s.error_message,
@@ -503,24 +493,20 @@ router.get('/tenants/:id/sources', async (req: AuthedRequest, res: Response) => 
         synced: s.last_synced_at ? relTime(s.last_synced_at) : '—',
       }))
     );
-  } catch (err) {
-    console.error('sources list error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.post('/sources/:id/refresh', async (req: AuthedRequest, res: Response) => {
-  try {
+router.post(
+  '/sources/:id/refresh',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     await refreshSource(req.params.id!).catch((err) => console.error('refresh error:', err));
     res.status(202).json({ ok: true });
-  } catch (err) {
-    console.error('refresh error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.post('/tenants/:id/check-drift', async (req: AuthedRequest, res: Response) => {
-  try {
+router.post(
+  '/tenants/:id/check-drift',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT id, url, content_hash FROM sources WHERE tenant_id = $1 AND kind = 'site' AND status = 'synced'`,
@@ -529,25 +515,20 @@ router.post('/tenants/:id/check-drift', async (req: AuthedRequest, res: Response
     );
     const results = await Promise.all(rows.map((s) => checkDrift(s)));
     res.json({ drifted: results.filter(Boolean).length });
-  } catch (err) {
-    console.error('drift error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.delete('/sources/:id', async (req: AuthedRequest, res: Response) => {
-  try {
+router.delete(
+  '/sources/:id',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const result = await withSystem((db) => db.query(`DELETE FROM sources WHERE id = $1`, [req.params.id]));
     if (result.rowCount === 0) {
       res.status(404).json({ error: 'Source not found' });
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('source delete error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Sandbox test chat ────────────────────────────────────────────────────
 
@@ -604,8 +585,9 @@ router.post('/tenants/:id/sandbox', async (req: AuthedRequest, res: Response) =>
 
 // ── Insights triage ──────────────────────────────────────────────────────
 
-router.get('/tenants/:id/insights', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/tenants/:id/insights',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT id, question, count, status, last_asked_at FROM insights
@@ -622,23 +604,21 @@ router.get('/tenants/:id/insights', async (req: AuthedRequest, res: Response) =>
         meta: `asked ${r.count} time${r.count === 1 ? '' : 's'} · last ${dayMonth(r.last_asked_at)}`,
       }))
     );
-  } catch (err) {
-    console.error('triage error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 const triageSchema = z.object({ action: z.enum(['reviewed', 'added', 'dismissed']) });
 /** What the operator sets here is exactly what the client sees. */
 const TRIAGE_TO_STATUS = { reviewed: 'fixing', added: 'added', dismissed: 'not_relevant' } as const;
 
-router.post('/insights/:id/triage', async (req: AuthedRequest, res: Response) => {
-  const parsed = triageSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid action' });
-    return;
-  }
-  try {
+router.post(
+  '/insights/:id/triage',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = triageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid action' });
+      return;
+    }
     const status = TRIAGE_TO_STATUS[parsed.data.action];
     const result = await withSystem(async (db) => {
       const r = await db.query(
@@ -657,16 +637,14 @@ router.post('/insights/:id/triage', async (req: AuthedRequest, res: Response) =>
       return;
     }
     res.json({ ok: true, status });
-  } catch (err) {
-    console.error('insight triage error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Conversations (operator view) ────────────────────────────────────────
 
-router.get('/tenants/:id/conversations', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/tenants/:id/conversations',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT c.id, c.status, c.last_message_at,
@@ -695,16 +673,14 @@ router.get('/tenants/:id/conversations', async (req: AuthedRequest, res: Respons
         };
       })
     );
-  } catch (err) {
-    console.error('op conversations error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Review queue (cross-tenant) ──────────────────────────────────────────
 
-router.get('/review', async (_req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/review',
+  asyncHandler(async (_req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT r.id, r.type, r.created_at, t.name AS tenant,
@@ -743,21 +719,19 @@ router.get('/review', async (_req: AuthedRequest, res: Response) => {
         };
       })
     );
-  } catch (err) {
-    console.error('review error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 const resolveSchema = z.object({ resolution: z.enum(['resolved', 'content_fix', 'dismissed']) });
 
-router.post('/review/:id/resolve', async (req: AuthedRequest, res: Response) => {
-  const parsed = resolveSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid resolution' });
-    return;
-  }
-  try {
+router.post(
+  '/review/:id/resolve',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = resolveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid resolution' });
+      return;
+    }
     const result = await withSystem((db) =>
       db.query(
         `UPDATE review_items SET status = $2, resolved_at = NOW() WHERE id = $1 AND status = 'open'`,
@@ -769,16 +743,14 @@ router.post('/review/:id/resolve', async (req: AuthedRequest, res: Response) => 
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('resolve error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Usage ────────────────────────────────────────────────────────────────
 
-router.get('/usage', async (_req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/usage',
+  asyncHandler(async (_req: AuthedRequest, res: Response) => {
     const data = await withSystem(async (db) => {
       const rows = await db.query(
         `SELECT t.name, a.monthly_cap,
@@ -814,10 +786,7 @@ router.get('/usage', async (_req: AuthedRequest, res: Response) => {
       }),
       bars: data.bars.map((b: { n: number }) => b.n),
     });
-  } catch (err) {
-    console.error('usage error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 export default router;

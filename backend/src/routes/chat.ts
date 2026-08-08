@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { withSystem, withTenant } from '../db/tenant.js';
+import { asyncHandler } from '../lib/http.js';
 import { embedQuery } from '../services/embeddings.js';
 import { generateAnswer, type GenerationResult } from '../services/generation.js';
 import { isWeakRetrieval, retrieveChunks, type RetrievedChunk } from '../services/retrieval.js';
@@ -89,8 +90,9 @@ router.options(/.*/, (req: Request, res: Response) => {
 
 // ── GET /chat/config ─────────────────────────────────────────────────────
 
-router.get('/config', async (req: Request, res: Response): Promise<void> => {
-  try {
+router.get(
+  '/config',
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const agent = await loadAgent(String(req.query.agentId ?? ''));
     if (!agent) {
       res.status(404).json({ error: 'Agent not found' });
@@ -109,23 +111,21 @@ router.get('/config', async (req: Request, res: Response): Promise<void> => {
       poweredBy: agent.powered_by,
       status: paused ? 'paused' : 'live',
     });
-  } catch (err) {
-    console.error('config error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── POST /chat/start ─────────────────────────────────────────────────────
 
 const startSchema = z.object({ agentId: z.string().uuid() });
 
-router.post('/start', async (req: Request, res: Response): Promise<void> => {
-  const parsed = startSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'agentId is required' });
-    return;
-  }
-  try {
+router.post(
+  '/start',
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const parsed = startSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'agentId is required' });
+      return;
+    }
     const agent = await loadAgent(parsed.data.agentId);
     if (!agent) {
       res.status(404).json({ error: 'Agent not found' });
@@ -147,16 +147,14 @@ router.post('/start', async (req: Request, res: Response): Promise<void> => {
       agentName: agent.name,
       color: agent.color,
     });
-  } catch (err) {
-    console.error('start error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── GET /chat/:sessionId/history ─────────────────────────────────────────
 
-router.get('/:sessionId/history', async (req: Request, res: Response): Promise<void> => {
-  try {
+router.get(
+  '/:sessionId/history',
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const conv = await resolveSession(req.params.sessionId!);
     if (!conv) {
       res.status(404).json({ error: 'Conversation not found' });
@@ -180,11 +178,8 @@ router.get('/:sessionId/history', async (req: Request, res: Response): Promise<v
         answer_status: m.answer_status ?? undefined,
       })),
     });
-  } catch (err) {
-    console.error('history error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── POST /chat/message ───────────────────────────────────────────────────
 
@@ -462,13 +457,14 @@ const feedbackSchema = z.object({
   rating: z.enum(['up', 'down']),
 });
 
-router.post('/feedback', async (req: Request, res: Response): Promise<void> => {
-  const parsed = feedbackSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'messageId and rating are required' });
-    return;
-  }
-  try {
+router.post(
+  '/feedback',
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const parsed = feedbackSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'messageId and rating are required' });
+      return;
+    }
     const { messageId, rating } = parsed.data;
     await withSystem(async (db) => {
       const { rows } = await db.query(
@@ -483,11 +479,8 @@ router.post('/feedback', async (req: Request, res: Response): Promise<void> => {
       }
     });
     res.json({ ok: true });
-  } catch (err) {
-    console.error('feedback error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── POST /chat/escalate ──────────────────────────────────────────────────
 
@@ -501,13 +494,14 @@ const escalateSchema = z.object({
 });
 
 /** Plain DB write — designed to keep working when the LLM is down. */
-router.post('/escalate', async (req: Request, res: Response): Promise<void> => {
-  const parsed = escalateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid escalation payload' });
-    return;
-  }
-  try {
+router.post(
+  '/escalate',
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const parsed = escalateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid escalation payload' });
+      return;
+    }
     const p = parsed.data;
     const agent = await loadAgent(p.agentId);
     if (!agent) {
@@ -538,10 +532,7 @@ router.post('/escalate', async (req: Request, res: Response): Promise<void> => {
       );
     });
     res.json({ ok: true });
-  } catch (err) {
-    console.error('escalate error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 export default router;

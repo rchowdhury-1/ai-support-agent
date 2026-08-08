@@ -7,6 +7,7 @@ import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { requireClient, type AuthedRequest } from '../middleware/auth.js';
 import { withSystem, withTenant } from '../db/tenant.js';
+import { asyncHandler } from '../lib/http.js';
 import {
   dayMonth,
   initials,
@@ -26,8 +27,9 @@ function tenantId(req: AuthedRequest): string {
 
 // ── GET /api/me ──────────────────────────────────────────────────────────
 
-router.get('/me', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/me',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT u.name, t.name AS business FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = $1`,
@@ -39,16 +41,14 @@ router.get('/me', async (req: AuthedRequest, res: Response) => {
       return;
     }
     res.json({ name: rows[0].name, initials: initials(rows[0].name), businessName: rows[0].business });
-  } catch (err) {
-    console.error('me error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── GET /api/overview ────────────────────────────────────────────────────
 
-router.get('/overview', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/overview',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const data = await withTenant(tenantId(req), async (db) => {
       const conv = await db.query(
         `SELECT count(*)::int AS total,
@@ -135,11 +135,8 @@ router.get('/overview', async (req: AuthedRequest, res: Response) => {
         time: relTime(w.created_at),
       })),
     });
-  } catch (err) {
-    console.error('overview error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Conversations ────────────────────────────────────────────────────────
 
@@ -163,8 +160,9 @@ function toClientMessages(rows: MessageRow[]) {
   }));
 }
 
-router.get('/conversations', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/conversations',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const rows = await withTenant(tenantId(req), async (db) => {
       const { rows } = await db.query(
         `SELECT c.id, c.visitor_name, c.status, c.created_at,
@@ -188,14 +186,12 @@ router.get('/conversations', async (req: AuthedRequest, res: Response) => {
         messages: [],
       }))
     );
-  } catch (err) {
-    console.error('conversations error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.get('/conversations/:id', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/conversations/:id',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const data = await withTenant(tenantId(req), async (db) => {
       const conv = await db.query(
         `SELECT id, visitor_name, status, created_at FROM conversations WHERE id = $1`,
@@ -224,15 +220,13 @@ router.get('/conversations/:id', async (req: AuthedRequest, res: Response) => {
       status: c.status,
       messages: toClientMessages(data.msgs),
     });
-  } catch (err) {
-    console.error('conversation error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 /** The client's safety-valve write: flag an answer for operator review. */
-router.post('/conversations/:id/messages/:idx/flag', async (req: AuthedRequest, res: Response) => {
-  try {
+router.post(
+  '/conversations/:id/messages/:idx/flag',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const idx = Number(req.params.idx);
     if (!Number.isInteger(idx) || idx < 0) {
       res.status(400).json({ error: 'Invalid message index' });
@@ -256,16 +250,14 @@ router.post('/conversations/:id/messages/:idx/flag', async (req: AuthedRequest, 
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('flag error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── GET /api/insights ────────────────────────────────────────────────────
 
-router.get('/insights', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/insights',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const months = await withTenant(tenantId(req), async (db) => {
       const { rows: monthRows } = await db.query(
         `SELECT DISTINCT month FROM insights ORDER BY month ASC`
@@ -323,16 +315,14 @@ router.get('/insights', async (req: AuthedRequest, res: Response) => {
       return result;
     });
     res.json(months);
-  } catch (err) {
-    console.error('insights error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Enquiries ────────────────────────────────────────────────────────────
 
-router.get('/enquiries', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/enquiries',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const rows = await withTenant(tenantId(req), (db) =>
       db.query(
         `SELECT id, name, contact, question, status, created_at FROM enquiries ORDER BY created_at DESC LIMIT 100`
@@ -349,21 +339,19 @@ router.get('/enquiries', async (req: AuthedRequest, res: Response) => {
         status: e.status,
       }))
     );
-  } catch (err) {
-    console.error('enquiries error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 const enquiryStatusSchema = z.object({ status: z.enum(['new', 'contacted', 'closed']) });
 
-router.put('/enquiries/:id/status', async (req: AuthedRequest, res: Response) => {
-  const parsed = enquiryStatusSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid status' });
-    return;
-  }
-  try {
+router.put(
+  '/enquiries/:id/status',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
+    const parsed = enquiryStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid status' });
+      return;
+    }
     const result = await withTenant(tenantId(req), (db) =>
       db.query(`UPDATE enquiries SET status = $2 WHERE id = $1`, [req.params.id, parsed.data.status])
     );
@@ -372,16 +360,14 @@ router.put('/enquiries/:id/status', async (req: AuthedRequest, res: Response) =>
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('enquiry status error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── GET /api/billing ─────────────────────────────────────────────────────
 
-router.get('/billing', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/billing',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withTenant(tenantId(req), (db) =>
       db.query(
         `SELECT setup_fee_pence, monthly_amount_pence, created_at, stripe_customer_id FROM tenants WHERE id = $1`,
@@ -399,10 +385,7 @@ router.get('/billing', async (req: AuthedRequest, res: Response) => {
       cardLine: t.stripe_customer_id ? 'Payment method stored securely with Stripe' : 'No payment method on file',
       invoices: [],
     });
-  } catch (err) {
-    console.error('billing error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 export default router;
