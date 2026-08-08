@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 
-import adminRoutes from './routes/admin.js';
+import adminRoutes from './routes/admin/index.js';
 import authRoutes from './routes/auth.js';
 import billingRoutes from './routes/billing.js';
 import chatRoutes from './routes/chat.js';
