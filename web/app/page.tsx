@@ -3,6 +3,7 @@ import { Nav } from './_marketing/Nav';
 import { Reveal } from './_marketing/Reveal';
 import { ReportPanel } from './_marketing/ReportPanel';
 import { WidgetDemo } from './_marketing/WidgetDemo';
+import { Pricing } from './_marketing/Pricing';
 
 const steps = [
   {
@@ -90,19 +91,6 @@ const trust = [
     body: 'Every conversation sits in your dashboard, and a disclaimer of your choosing appears under every answer.',
   },
 ];
-
-const included = [
-  'Full setup done for you',
-  'Trained on your content only',
-  'Monthly insight report, written for you',
-  'You approve everything it knows',
-];
-
-const Check = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 6 9 17l-5-5" />
-  </svg>
-);
 
 export default function Home() {
   return (
@@ -278,44 +266,7 @@ export default function Home() {
       </section>
 
       {/* ── Pricing ──────────────────────────────────────── */}
-      <section id="pricing" className="border-t border-line">
-        <div className="container-site py-[88px] flex justify-center">
-          <Reveal index={0} className="w-[min(620px,100%)]">
-            <div className="card rounded-[20px] py-11 px-[clamp(24px,5vw,52px)] text-center shadow-[0_24px_60px_-30px_rgba(24,33,28,.28)]">
-              <div className="eyebrow mb-5">Simple pricing</div>
-              <div className="text-[15px] text-ink2 mb-1.5">From</div>
-              <div className="flex items-baseline justify-center gap-2.5 flex-wrap">
-                <span className="font-serif font-semibold text-[clamp(38px,5vw,50px)] tracking-[-.02em] leading-[1.15] border-b-2 border-dashed border-line-strong">
-                  £500
-                </span>
-                <span className="text-base text-ink2 font-semibold">setup</span>
-                <span className="font-serif italic text-[26px] text-ink3">+</span>
-                <span className="font-serif font-semibold text-[clamp(38px,5vw,50px)] tracking-[-.02em] leading-[1.15] border-b-2 border-dashed border-line-strong">
-                  £99
-                </span>
-                <span className="text-base text-ink2 font-semibold">/month</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 mt-4 mb-[26px] font-mono text-[9.5px] font-bold uppercase tracking-[.12em] text-warn border border-dashed border-warn rounded-full px-[11px] py-[5px]">
-                Placeholder figures — set before launch
-              </div>
-              <div className="flex flex-col gap-[11px] w-fit mx-auto mb-[30px] text-left">
-                {included.map((line) => (
-                  <div key={line} className="flex gap-2.5 items-center">
-                    <Check />
-                    <span className="text-[14.5px] text-ink">{line}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="#maker" className="btn-primary text-[15.5px] px-[26px] py-3.5 rounded-xl">
-                Book a 15-minute call
-              </a>
-              <div className="text-[13px] text-ink3 mt-3.5 leading-normal">
-                Final quote after a short call — it depends on how much content you have.
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+      <Pricing />
 
       {/* ── Note from the maker ──────────────────────────── */}
       <section id="maker" className="border-t border-line">
