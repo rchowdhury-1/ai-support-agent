@@ -1,41 +1,8 @@
 import { escalate, fetchConfig, loadHistory, sendFeedback, sendMessage, startSession } from './api';
 import { css } from './styles';
+import { FONT_HREF, ICONS, STORAGE_PREFIX, el, luminance } from './dom';
+import { buildContactForm, buildHeader } from './views';
 import type { AgentConfig, AnswerMeta, WidgetOptions } from './types';
-
-const STORAGE_PREFIX = 'supportai_v2_';
-const FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@1,6..72,400..600&family=Schibsted+Grotesk:wght@400;600;700&display=swap';
-
-// Static, trusted SVG fragments (never interpolated with user data).
-const ICONS = {
-  chat: '<svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 9 9 0 0 1-3.7-.8L3 21l1.9-4.4A8.4 8.4 0 1 1 21 11.5z"></path></svg>',
-  close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>',
-  send: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg>',
-  doc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>',
-  thumb: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h9.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3H14z"></path><path d="M6 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h2"></path></svg>',
-  check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2F7D4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>',
-  mail: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4z"></path><path d="M12 8v3"></path><path d="M12 13.5v.01"></path></svg>',
-};
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function luminance(hex: string): number {
-  const h = hex.replace('#', '');
-  if (h.length < 6) return 0.3;
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
 
 type DegradedSource = 'quota_fallback' | 'agent_paused' | 'error';
 
@@ -54,7 +21,6 @@ export class Widget {
   private sessionId: string | null = null;
   private busy = false;
   private started = false;
-  private degradedSource: DegradedSource | null = null;
   private readonly inline: boolean;
 
   constructor(opts: WidgetOptions, cfg: AgentConfig) {
@@ -114,7 +80,7 @@ export class Widget {
   private openPanel(): void {
     this.launcher.style.display = 'none';
     this.panel = el('div', 'panel');
-    this.panel.appendChild(this.buildHeader());
+    this.panel.appendChild(buildHeader(this.cfg, this.inline, () => this.closePanel()));
     if (this.inline) this.root.appendChild(this.panel);
     else this.root.insertBefore(this.panel, this.launcher);
 
@@ -136,31 +102,10 @@ export class Widget {
     this.launcher.focus();
   }
 
-  private buildHeader(): HTMLDivElement {
-    const hdr = el('div', 'hdr');
-    const avatar = el('div', 'hdr-avatar', (this.cfg.agentName || 'S').trim().charAt(0));
-    const info = el('div', 'hdr-info');
-    info.appendChild(el('div', 'hdr-name', this.cfg.agentName));
-    const status = el('div', 'hdr-status');
-    status.appendChild(el('span', 'hdr-dot'));
-    status.appendChild(el('span', undefined, this.cfg.status === 'paused' ? 'Leave a message' : 'Online — answers in seconds'));
-    info.appendChild(status);
-    hdr.append(avatar, info);
-    if (!this.inline) {
-      const close = el('button', 'hdr-close');
-      close.setAttribute('aria-label', 'Minimise chat');
-      close.innerHTML = ICONS.close;
-      close.addEventListener('click', () => this.closePanel());
-      hdr.appendChild(close);
-    }
-    return hdr;
-  }
-
   // ── Chat mode ───────────────────────────────────────────
 
   private renderChat(): void {
     if (!this.panel) return;
-    this.degradedSource = null;
 
     this.msgs = el('div', 'msgs');
     this.msgs.setAttribute('aria-live', 'polite');
@@ -443,54 +388,14 @@ export class Widget {
     // Honest refusal → inline details form (the escalation moment).
     // The escalation carries the visitor's unanswered question, not the refusal text.
     if (this.cfg.v2 && meta.answerStatus === 'not_in_kb' && userQuestion) {
-      bubble.wrap.appendChild(this.buildMiniForm(userQuestion));
+      bubble.wrap.appendChild(buildContactForm(this.opts, this.sessionId, userQuestion, () => this.scrollDown()));
     }
-  }
-
-  private buildMiniForm(question: string): HTMLDivElement {
-    const form = el('div', 'mini-form');
-    const name = el('input');
-    name.placeholder = 'Your name';
-    const contact = el('input');
-    contact.placeholder = 'Email or phone';
-    const btn = el('button', 'btn-accent', 'Leave my details');
-    btn.addEventListener('click', async () => {
-      if (!contact.value.trim()) { contact.focus(); return; }
-      btn.disabled = true;
-      const ok = await escalate(this.opts.apiUrl, {
-        agentId: this.opts.agentId,
-        sessionId: this.sessionId || undefined,
-        name: name.value.trim(),
-        contact: contact.value.trim(),
-        message: question,
-        source: 'no_answer',
-      });
-      if (ok) {
-        const done = el('div', 'form-done');
-        const icon = el('span');
-        icon.innerHTML = ICONS.check;
-        const msg = el('span');
-        msg.appendChild(el('strong', undefined, 'Details passed to the team.'));
-        msg.append(' They’ll follow up shortly.');
-        done.append(icon, msg);
-        form.replaceWith(done);
-      } else {
-        btn.disabled = false;
-        if (!form.querySelector('.form-err')) {
-          form.appendChild(el('div', 'form-err', 'That didn’t send — please try again.'));
-        }
-      }
-      this.scrollDown();
-    });
-    form.append(name, contact, btn);
-    return form;
   }
 
   // ── Degraded mode — polite contact form, never an error ─
 
   private renderDegraded(source: DegradedSource, pendingQuestion?: string): void {
     if (!this.panel) return;
-    this.degradedSource = source;
     while (this.panel.childNodes.length > 1) this.panel.lastChild?.remove(); // keep header
     this.msgs = null;
     this.input = null;

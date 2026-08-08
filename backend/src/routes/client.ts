@@ -4,30 +4,24 @@
  * isolation, the WHERE clauses are just shape.
  */
 import { Router, type Response } from 'express';
-import { z } from 'zod';
 import { requireClient, type AuthedRequest } from '../middleware/auth.js';
 import { withSystem, withTenant } from '../db/tenant.js';
-import {
-  dayMonth,
-  initials,
-  longDate,
-  monthKey,
-  monthLabel,
-  pence,
-  relTime,
-} from '../lib/format.js';
+import { asyncHandler } from '../lib/http.js';
+import { initials, monthKey, monthLabel, relTime } from '../lib/format.js';
+import { tenantId } from './client-support.js';
+import reportsRouter from './client-reports.js';
 
 const router = Router();
 router.use(requireClient);
 
-function tenantId(req: AuthedRequest): string {
-  return req.auth!.tenantId!;
-}
+// The overview sparkline's fixed vertical ceiling (see /overview).
+const SPARKLINE_CEILING = 16;
 
 // ── GET /api/me ──────────────────────────────────────────────────────────
 
-router.get('/me', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/me',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const { rows } = await withSystem((db) =>
       db.query(
         `SELECT u.name, t.name AS business FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = $1`,
@@ -39,16 +33,14 @@ router.get('/me', async (req: AuthedRequest, res: Response) => {
       return;
     }
     res.json({ name: rows[0].name, initials: initials(rows[0].name), businessName: rows[0].business });
-  } catch (err) {
-    console.error('me error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── GET /api/overview ────────────────────────────────────────────────────
 
-router.get('/overview', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/overview',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const data = await withTenant(tenantId(req), async (db) => {
       const conv = await db.query(
         `SELECT count(*)::int AS total,
@@ -82,12 +74,14 @@ router.get('/overview', async (req: AuthedRequest, res: Response) => {
     });
 
     const rate = data.msgs.total > 0 ? Math.round((data.msgs.answered / data.msgs.total) * 100) : 100;
-    // The overview sparkline renders against a fixed ceiling of 16 — scale
-    // busier days down rather than letting the path clip.
+    // The overview sparkline renders against a fixed ceiling — scale busier
+    // days down rather than letting the path clip.
     const rawSpark: number[] = data.spark.map((r: { n: number }) => r.n);
     const sparkMax = Math.max(...rawSpark, 0);
     const spark =
-      sparkMax > 16 ? rawSpark.map((n) => Math.round((n / sparkMax) * 16)) : rawSpark;
+      sparkMax > SPARKLINE_CEILING
+        ? rawSpark.map((n) => Math.round((n / sparkMax) * SPARKLINE_CEILING))
+        : rawSpark;
 
     res.json({
       rangeLabel: monthLabel(monthKey()),
@@ -135,11 +129,8 @@ router.get('/overview', async (req: AuthedRequest, res: Response) => {
         time: relTime(w.created_at),
       })),
     });
-  } catch (err) {
-    console.error('overview error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 // ── Conversations ────────────────────────────────────────────────────────
 
@@ -163,8 +154,9 @@ function toClientMessages(rows: MessageRow[]) {
   }));
 }
 
-router.get('/conversations', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/conversations',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const rows = await withTenant(tenantId(req), async (db) => {
       const { rows } = await db.query(
         `SELECT c.id, c.visitor_name, c.status, c.created_at,
@@ -188,14 +180,12 @@ router.get('/conversations', async (req: AuthedRequest, res: Response) => {
         messages: [],
       }))
     );
-  } catch (err) {
-    console.error('conversations error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-router.get('/conversations/:id', async (req: AuthedRequest, res: Response) => {
-  try {
+router.get(
+  '/conversations/:id',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const data = await withTenant(tenantId(req), async (db) => {
       const conv = await db.query(
         `SELECT id, visitor_name, status, created_at FROM conversations WHERE id = $1`,
@@ -224,15 +214,13 @@ router.get('/conversations/:id', async (req: AuthedRequest, res: Response) => {
       status: c.status,
       messages: toClientMessages(data.msgs),
     });
-  } catch (err) {
-    console.error('conversation error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
 /** The client's safety-valve write: flag an answer for operator review. */
-router.post('/conversations/:id/messages/:idx/flag', async (req: AuthedRequest, res: Response) => {
-  try {
+router.post(
+  '/conversations/:id/messages/:idx/flag',
+  asyncHandler(async (req: AuthedRequest, res: Response) => {
     const idx = Number(req.params.idx);
     if (!Number.isInteger(idx) || idx < 0) {
       res.status(400).json({ error: 'Invalid message index' });
@@ -256,153 +244,10 @@ router.post('/conversations/:id/messages/:idx/flag', async (req: AuthedRequest, 
       return;
     }
     res.json({ ok: true });
-  } catch (err) {
-    console.error('flag error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  })
+);
 
-// ── GET /api/insights ────────────────────────────────────────────────────
-
-router.get('/insights', async (req: AuthedRequest, res: Response) => {
-  try {
-    const months = await withTenant(tenantId(req), async (db) => {
-      const { rows: monthRows } = await db.query(
-        `SELECT DISTINCT month FROM insights ORDER BY month ASC`
-      );
-      const keys: string[] = monthRows.map((r) => r.month);
-      const current = monthKey();
-      if (!keys.includes(current)) keys.push(current);
-
-      const result = [];
-      for (const key of keys.slice(-6)) {
-        const { rows } = await db.query(
-          `SELECT id, question, count, status, first_asked_at, last_asked_at
-           FROM insights WHERE month = $1 ORDER BY count DESC, last_asked_at DESC`,
-          [key]
-        );
-        const answered = await db.query(
-          `SELECT count(*)::int AS n FROM messages
-           WHERE role = 'assistant' AND answer_status IN ('answered','partial')
-             AND to_char(created_at, 'YYYY-MM') = $1`,
-          [key]
-        );
-        const topics = await db.query(
-          `SELECT question_type, count(*)::int AS n FROM messages
-           WHERE role = 'assistant' AND question_type IS NOT NULL
-             AND to_char(created_at, 'YYYY-MM') = $1
-           GROUP BY question_type ORDER BY n DESC LIMIT 3`,
-          [key]
-        );
-        const added = rows.filter((r) => r.status === 'added').length;
-        result.push({
-          key,
-          label: monthLabel(key),
-          empty: rows.length === 0,
-          ...(rows.length > 0
-            ? {
-                summary: {
-                  found: rows.length,
-                  foundSub: 'questions your site couldn′t answer',
-                  added,
-                  addedSub: added === 1 ? 'answer added' : 'answers added',
-                  answeredSince: answered.rows[0].n,
-                  topics: topics.rows.map((t) => t.question_type),
-                },
-              }
-            : { emptyStats: { answered: answered.rows[0].n } }),
-          rows: rows.map((r) => ({
-            id: r.id,
-            question: r.question,
-            count: r.count,
-            meta: `asked ${r.count} time${r.count === 1 ? '' : 's'} · last ${dayMonth(r.last_asked_at)}`,
-            status: r.status,
-          })),
-        });
-      }
-      return result;
-    });
-    res.json(months);
-  } catch (err) {
-    console.error('insights error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ── Enquiries ────────────────────────────────────────────────────────────
-
-router.get('/enquiries', async (req: AuthedRequest, res: Response) => {
-  try {
-    const rows = await withTenant(tenantId(req), (db) =>
-      db.query(
-        `SELECT id, name, contact, question, status, created_at FROM enquiries ORDER BY created_at DESC LIMIT 100`
-      )
-    );
-    res.json(
-      rows.rows.map((e) => ({
-        id: e.id,
-        name: e.name,
-        initials: initials(e.name),
-        email: e.contact,
-        question: e.question,
-        time: relTime(e.created_at),
-        status: e.status,
-      }))
-    );
-  } catch (err) {
-    console.error('enquiries error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-const enquiryStatusSchema = z.object({ status: z.enum(['new', 'contacted', 'closed']) });
-
-router.put('/enquiries/:id/status', async (req: AuthedRequest, res: Response) => {
-  const parsed = enquiryStatusSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid status' });
-    return;
-  }
-  try {
-    const result = await withTenant(tenantId(req), (db) =>
-      db.query(`UPDATE enquiries SET status = $2 WHERE id = $1`, [req.params.id, parsed.data.status])
-    );
-    if (result.rowCount === 0) {
-      res.status(404).json({ error: 'Enquiry not found' });
-      return;
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('enquiry status error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ── GET /api/billing ─────────────────────────────────────────────────────
-
-router.get('/billing', async (req: AuthedRequest, res: Response) => {
-  try {
-    const { rows } = await withTenant(tenantId(req), (db) =>
-      db.query(
-        `SELECT setup_fee_pence, monthly_amount_pence, created_at, stripe_customer_id FROM tenants WHERE id = $1`,
-        [tenantId(req)]
-      )
-    );
-    const t = rows[0];
-    const next = new Date();
-    next.setMonth(next.getMonth() + 1, 1);
-    res.json({
-      planStatus: 'active',
-      setupLine: t.setup_fee_pence > 0 ? `${pence(t.setup_fee_pence)} set-up — paid` : 'Set-up complete',
-      monthlyLine: `${pence(t.monthly_amount_pence)} / month`,
-      renewalLine: `Renews ${longDate(next)}`,
-      cardLine: t.stripe_customer_id ? 'Payment method stored securely with Stripe' : 'No payment method on file',
-      invoices: [],
-    });
-  } catch (err) {
-    console.error('billing error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// Insights, enquiries, and billing routes live in ./client-reports.
+router.use(reportsRouter);
 
 export default router;
