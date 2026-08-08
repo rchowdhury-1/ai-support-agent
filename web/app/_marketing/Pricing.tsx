@@ -31,7 +31,7 @@ const TIERS: Tier[] = [
   {
     name: 'Professional',
     model: 'currently Claude Sonnet',
-    monthly: { '5k': 199, '20k': 349 },
+    monthly: { '5k': 199, '20k': 449 },
     features: [
       'Everything in Standard, plus a higher-accuracy model — for practices where precision matters most (legal, medical, financial, or anywhere a wrong answer carries real cost)',
       'Priority handling of flagged answers',
