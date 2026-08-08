@@ -15,26 +15,16 @@ import {
 } from '@/lib/operator-api';
 import type { CrawlPage } from '@/lib/operator-types';
 import { ChunkPanel } from '../_components/ChunkPanel';
+import { STEPS, label, input, card, primaryBtn, ACCENTS, crawlStatusPill } from './onboarding-ui';
 
 /**
  * 6-step onboarding wizard, fully live against the v2 backend. The point of
  * the flow: started 11:20 — live the same day.
  */
 
-const STEPS = ['Create', 'Ingest', 'Agent', 'Sandbox', 'Embed', 'Billing'];
-
-const label = 'flex flex-col gap-1.5 text-xs font-bold text-ink2';
-const input =
-  'px-3 py-2.5 border border-line rounded-[9px] bg-page text-ink text-[13px] outline-none focus:border-accent font-sans font-normal';
-const card = 'bg-surface border border-line rounded-[14px] p-6 flex flex-col';
-const primaryBtn =
-  'self-start px-[18px] py-2.5 border-none rounded-[10px] bg-accent text-accent-ink text-[13px] font-bold cursor-pointer hover:brightness-110 disabled:opacity-60';
-
 const API_URL =
   process.env.NEXT_PUBLIC_SUPPORTAI_API_URL || 'https://ai-support-agent-backend-xsoi.onrender.com';
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL || 'https://supportai-web-rc-1.vercel.app/widget/v2.js';
-
-const ACCENTS = ['#B3552E', '#2D5A44', '#1F3A5F', '#53387A'];
 
 type SandboxTurn = { id: number; role: 'user' | 'bot'; text: string; answer?: SandboxResult | 'pending' };
 
@@ -59,12 +49,6 @@ function embedSnippets(agentId: string): Record<'html' | 'next' | 'wp', { label:
   };
 }
 
-const crawlStatusPill = {
-  done: { tx: 'Ingested ✓', color: 'var(--g)', bg: 'color-mix(in srgb, var(--g) 13%, transparent)' },
-  processing: { tx: 'Processing…', color: 'var(--a)', bg: 'color-mix(in srgb, var(--a) 12%, transparent)' },
-  queued: { tx: 'Queued', color: 'var(--t3)', bg: 'color-mix(in srgb, var(--t3) 14%, transparent)' },
-  skipped: { tx: 'Skipped', color: 'var(--t3)', bg: 'color-mix(in srgb, var(--t3) 12%, transparent)' },
-} as const;
 
 export function Wizard({ initialStep, initialTenantId }: { initialStep: number; initialTenantId?: string }) {
   const [step, setStepRaw] = useState(Math.min(6, Math.max(1, initialStep)));
