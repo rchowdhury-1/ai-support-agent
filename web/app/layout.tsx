@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 };
 
 // Applied before hydration so a saved dark preference never flashes light.
+// The catch is intentionally empty: if localStorage is unavailable (private
+// mode, blocked cookies) we simply fall back to the default light theme.
 const themeInit = `try{var t=localStorage.getItem('sai-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-sai',t)}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
