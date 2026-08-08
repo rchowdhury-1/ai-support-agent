@@ -54,7 +54,6 @@ export class Widget {
   private sessionId: string | null = null;
   private busy = false;
   private started = false;
-  private degradedSource: DegradedSource | null = null;
   private readonly inline: boolean;
 
   constructor(opts: WidgetOptions, cfg: AgentConfig) {
@@ -160,7 +159,6 @@ export class Widget {
 
   private renderChat(): void {
     if (!this.panel) return;
-    this.degradedSource = null;
 
     this.msgs = el('div', 'msgs');
     this.msgs.setAttribute('aria-live', 'polite');
@@ -490,7 +488,6 @@ export class Widget {
 
   private renderDegraded(source: DegradedSource, pendingQuestion?: string): void {
     if (!this.panel) return;
-    this.degradedSource = source;
     while (this.panel.childNodes.length > 1) this.panel.lastChild?.remove(); // keep header
     this.msgs = null;
     this.input = null;
