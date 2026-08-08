@@ -1,6 +1,11 @@
 /** Static style tokens and data for the onboarding wizard. */
+import type { SandboxResult } from '@/lib/operator-api';
 
 export const STEPS = ['Create', 'Ingest', 'Agent', 'Sandbox', 'Embed', 'Billing'];
+
+export type SandboxTurn = { id: number; role: 'user' | 'bot'; text: string; answer?: SandboxResult | 'pending' };
+
+export type EmbedSnippets = Record<'html' | 'next' | 'wp', { label: string; code: string; note: string }>;
 
 export const label = 'flex flex-col gap-1.5 text-xs font-bold text-ink2';
 export const input =
