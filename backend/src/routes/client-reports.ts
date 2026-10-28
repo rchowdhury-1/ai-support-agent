@@ -85,7 +85,7 @@ router.get(
   asyncHandler(async (req: AuthedRequest, res: Response) => {
     const rows = await withTenant(tenantId(req), (db) =>
       db.query(
-        `SELECT id, name, contact, question, status, created_at FROM enquiries ORDER BY created_at DESC LIMIT 100`
+        `SELECT id, name, contact, question, status, intent, created_at FROM enquiries ORDER BY created_at DESC LIMIT 100`
       )
     );
     res.json(
@@ -95,6 +95,7 @@ router.get(
         initials: initials(e.name),
         email: e.contact,
         question: e.question,
+        intent: e.intent,
         time: relTime(e.created_at),
         status: e.status,
       }))
@@ -102,7 +103,7 @@ router.get(
   })
 );
 
-const enquiryStatusSchema = z.object({ status: z.enum(['new', 'contacted', 'closed']) });
+const enquiryStatusSchema = z.object({ status: z.enum(['new', 'contacted', 'converted', 'closed']) });
 
 router.put(
   '/enquiries/:id/status',

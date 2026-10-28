@@ -78,7 +78,8 @@ describe('consumeJsonStream', () => {
     const result = await consumeJsonStream(
       stream(
         '{"answer":"UK delivery is £3.95, free over £30.",',
-        '"status":"answered","question_type":"shipping","citations":[1,3,9]}'
+        '"status":"answered","question_type":"shipping","citations":[1,3,9],',
+        '"enquiry_intent":"none","lead_capture":null}'
       ),
       3,
       (t) => deltas.push(t)
@@ -86,9 +87,28 @@ describe('consumeJsonStream', () => {
     expect(result.answer).toBe('UK delivery is £3.95, free over £30.');
     expect(result.status).toBe('answered');
     expect(result.questionType).toBe('shipping');
+    expect(result.enquiryIntent).toBe('none');
+    expect(result.leadCapture).toBeNull();
     // 9 is out of range for 3 retrieved chunks — stripped server-side.
     expect(result.citations).toEqual([1, 3]);
     expect(deltas.join('')).toBe('UK delivery is £3.95, free over £30.');
+  });
+
+  it('parses a lead capture payload', async () => {
+    const result = await consumeJsonStream(
+      stream(
+        '{"answer":"Thanks, Priya — someone will call you back.","status":"answered",',
+        '"question_type":"pricing","citations":[],"enquiry_intent":"pricing",',
+        '"lead_capture":{"name":"Priya","contact":"priya@example.com","summary":"Wholesale pricing enquiry"}}'
+      ),
+      0
+    );
+    expect(result.enquiryIntent).toBe('pricing');
+    expect(result.leadCapture).toEqual({
+      name: 'Priya',
+      contact: 'priya@example.com',
+      summary: 'Wholesale pricing enquiry',
+    });
   });
 
   it('rejects malformed output', async () => {

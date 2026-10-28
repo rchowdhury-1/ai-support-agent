@@ -13,9 +13,9 @@ const sans = Schibsted_Grotesk({ subsets: ['latin'], variable: '--font-sans' });
 const mono = Spline_Sans_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 export const metadata: Metadata = {
-  title: 'SupportAI — Your website, answering customers',
+  title: 'SupportAI — Turn website visitors into leads',
   description:
-    "A done-for-you AI assistant for small UK firms, trained on your business's own content. It answers politely, shows its source, and takes a message when it doesn't know.",
+    "A done-for-you AI agent trained on your business's own content. It answers visitor questions, then captures name and contact details the moment someone shows real interest — and emails you the lead immediately.",
 };
 
 // Applied before hydration so a saved dark preference never flashes light.
@@ -25,7 +25,7 @@ const themeInit = `try{var t=localStorage.getItem('sai-theme');if(t==='dark'||t=
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-GB" data-sai="light" suppressHydrationWarning>
+    <html lang="en-US" data-sai="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>

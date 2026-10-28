@@ -66,6 +66,7 @@ export function assertOrigin(req: Request, res: Response, agent: AgentRow): bool
 export interface SessionCtx {
   id: string;
   messages_count: number;
+  qualificationOffered: boolean;
   agent: AgentRow;
 }
 
@@ -74,7 +75,7 @@ export async function resolveSession(sessionId: string): Promise<SessionCtx | nu
     db.query(
       // a.* also carries an `id` column — alias the conversation id so the
       // two never collide in the result row.
-      `SELECT c.id AS conversation_id, c.messages_count, a.*, t.status AS tenant_status
+      `SELECT c.id AS conversation_id, c.messages_count, c.qualification_offered, a.*, t.status AS tenant_status
        FROM conversations c
        JOIN agents a ON a.id = c.agent_id
        JOIN tenants t ON t.id = a.tenant_id
@@ -84,8 +85,13 @@ export async function resolveSession(sessionId: string): Promise<SessionCtx | nu
   );
   const r = rows[0];
   if (!r) return null;
-  const { conversation_id, messages_count, ...agent } = r;
-  return { id: conversation_id, messages_count, agent: agent as AgentRow };
+  const { conversation_id, messages_count, qualification_offered, ...agent } = r;
+  return {
+    id: conversation_id,
+    messages_count,
+    qualificationOffered: qualification_offered,
+    agent: agent as AgentRow,
+  };
 }
 
 // A single conversation may hold up to this multiple of the per-session cap
@@ -163,14 +169,15 @@ export async function persistAssistantTurn(opts: {
   return withTenant(tenantId, async (db) => {
     const { rows } = await db.query(
       `INSERT INTO messages (tenant_id, conversation_id, role, content, answer_status,
-                             question_type, citations, retrieval, tokens_in, tokens_out)
-       VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                             question_type, enquiry_intent, citations, retrieval, tokens_in, tokens_out)
+       VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [
         tenantId,
         conversationId,
         result.answer,
         result.status,
         result.questionType,
+        result.enquiryIntent,
         JSON.stringify(citations),
         JSON.stringify(telemetry),
         result.tokensIn,
@@ -178,12 +185,16 @@ export async function persistAssistantTurn(opts: {
       ]
     );
     const newStatus = result.status === 'not_in_kb' ? 'no_answer' : 'answered';
+    // Once intent is detected the agent has had its one chance to ask —
+    // flip the flag regardless of whether the visitor answered, so it never nags.
+    const offeredNow = result.enquiryIntent !== 'none';
     await db.query(
       `UPDATE conversations
        SET messages_count = messages_count + 2, last_message_at = NOW(),
-           status = CASE WHEN status = 'escalated' THEN status ELSE $2 END
+           status = CASE WHEN status = 'escalated' THEN status ELSE $2 END,
+           qualification_offered = qualification_offered OR $3
        WHERE id = $1`,
-      [conversationId, newStatus]
+      [conversationId, newStatus, offeredNow]
     );
     await db.query(
       `INSERT INTO usage_daily (tenant_id, agent_id, day, messages, tokens_in, tokens_out, cost_usd)

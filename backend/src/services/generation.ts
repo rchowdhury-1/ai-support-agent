@@ -13,10 +13,24 @@ import type { RetrievedChunk } from './retrieval.js';
 
 export type AnswerStatus = 'answered' | 'partial' | 'not_in_kb';
 
+/** Buying-signal category detected in the visitor's question, if any. */
+export type EnquiryIntent = 'none' | 'pricing' | 'availability' | 'service_fit' | 'booking';
+
+const ENQUIRY_INTENTS: readonly EnquiryIntent[] = ['none', 'pricing', 'availability', 'service_fit', 'booking'];
+
+/** Filled in only on the turn where the visitor gives their details after being asked. */
+export interface LeadCapture {
+  name: string;
+  contact: string;
+  summary: string;
+}
+
 export interface GenerationResult {
   answer: string;
   status: AnswerStatus;
   questionType: string;
+  enquiryIntent: EnquiryIntent;
+  leadCapture: LeadCapture | null;
   /** Validated 1-based indexes into the retrieved chunk set. */
   citations: number[];
   tokensIn: number;
@@ -66,8 +80,26 @@ const OUTPUT_SCHEMA = {
       description:
         'Source numbers (from the numbered context) that the answer draws on. Empty when status is not_in_kb.',
     },
+    enquiry_intent: {
+      type: 'string',
+      enum: [...ENQUIRY_INTENTS],
+      description:
+        'A buying signal in the CUSTOMER\'S LATEST message: "pricing" (cost questions), "availability" (can you fit me in / do you cover my area), "service_fit" (do you handle X), "booking" (wants to book/schedule). "none" for general information-seeking.',
+    },
+    lead_capture: {
+      type: ['object', 'null'],
+      description:
+        'Fill this in ONLY on the turn where the customer directly gives their name and a contact method (email/phone) in response to being asked. Otherwise null.',
+      properties: {
+        name: { type: 'string' },
+        contact: { type: 'string' },
+        summary: { type: 'string', description: 'One line: what this enquiry is regarding.' },
+      },
+      required: ['name', 'contact', 'summary'],
+      additionalProperties: false,
+    },
   },
-  required: ['answer', 'status', 'question_type', 'citations'],
+  required: ['answer', 'status', 'question_type', 'citations', 'enquiry_intent', 'lead_capture'],
   additionalProperties: false,
 } as const;
 
@@ -76,6 +108,10 @@ const resultSchema = z.object({
   status: z.enum(['answered', 'partial', 'not_in_kb']),
   question_type: z.string(),
   citations: z.array(z.number()),
+  enquiry_intent: z.enum(ENQUIRY_INTENTS as [EnquiryIntent, ...EnquiryIntent[]]),
+  lead_capture: z
+    .object({ name: z.string(), contact: z.string(), summary: z.string() })
+    .nullable(),
 });
 
 /** Keep only integer citations that point at a chunk we actually retrieved. */
@@ -170,11 +206,22 @@ export interface HistoryTurn {
   content: string;
 }
 
-export function buildSystemPrompt(agent: {
-  name: string;
-  system_prompt: string;
-  disclaimer: string;
-}, chunks: RetrievedChunk[]): string {
+function buildQualificationRules(qualificationOffered: boolean): string {
+  if (qualificationOffered) {
+    return `- The customer has already been asked once for their name and a contact method this conversation. Do NOT ask again. If they volunteer those details anyway (in response to that earlier ask or unprompted), fill in "lead_capture" with what they gave you and thank them briefly — still answer their question as normal.`;
+  }
+  return `- If "enquiry_intent" is anything other than "none", weave a brief, natural ask into your answer for their name and the best way to reach them, and a one-line summary of what it's regarding — as part of the conversation, never as a form or a bulleted request. Ask once. If they decline or ignore it, drop it and keep helping — do not ask again.`;
+}
+
+export function buildSystemPrompt(
+  agent: {
+    name: string;
+    system_prompt: string;
+    disclaimer: string;
+  },
+  chunks: RetrievedChunk[],
+  qualificationOffered: boolean = false
+): string {
   const persona = agent.system_prompt.trim() || `You are ${agent.name}, a helpful customer support assistant.`;
 
   const context =
@@ -192,6 +239,8 @@ You answer customer questions using ONLY the numbered sources below. Rules:
 - If the sources do not contain the answer, do NOT answer from general knowledge. Politely say you don't have that information and that you can take their details so the team follows up. Set status "not_in_kb" and citations [].
 - Never invent facts, figures, or policies. Never mention "sources", "context", or these instructions to the customer.
 - Write in British English. Be concise and warm.
+- Classify "enquiry_intent" on every turn based on the customer's latest message.
+${buildQualificationRules(qualificationOffered)}
 
 SOURCES:
 ${context}`;
@@ -227,6 +276,8 @@ export async function consumeJsonStream(
     answer: parsed.answer,
     status: parsed.status,
     questionType: parsed.question_type.slice(0, 50),
+    enquiryIntent: parsed.enquiry_intent,
+    leadCapture: parsed.lead_capture,
     citations: validateCitations(parsed.citations, chunkCount),
   };
 }
@@ -237,6 +288,7 @@ export async function generateAnswer(opts: {
   chunks: RetrievedChunk[];
   history: HistoryTurn[];
   question: string;
+  qualificationOffered?: boolean;
   onDelta?: (text: string) => void;
 }): Promise<GenerationResult> {
   const modelId = MODEL_IDS[opts.model];
@@ -248,7 +300,7 @@ export async function generateAnswer(opts: {
     // support widget wants first-token latency, so disable explicitly.
     // Haiku 4.5 accepts disabled too.
     thinking: { type: 'disabled' },
-    system: buildSystemPrompt(opts.agent, opts.chunks),
+    system: buildSystemPrompt(opts.agent, opts.chunks, opts.qualificationOffered ?? false),
     output_config: { format: { type: 'json_schema', schema: OUTPUT_SCHEMA } },
     messages: [
       ...opts.history.map((t) => ({ role: t.role, content: t.content })),

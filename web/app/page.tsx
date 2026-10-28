@@ -20,18 +20,19 @@ export default function Home() {
         <div className="container-site relative grid grid-cols-1 md:grid-cols-2 gap-14 items-center pt-[72px] pb-[88px]">
           <div className="max-w-[560px]">
             <Reveal index={0}>
-              <div className="eyebrow mb-[22px]">Done-for-you AI support · UK small firms</div>
+              <div className="eyebrow mb-[22px]">Done-for-you AI lead capture · US small businesses</div>
             </Reveal>
             <Reveal index={1}>
               <h1 className="display-h text-[clamp(38px,4.6vw,56px)] leading-[1.04] tracking-[-.035em] mb-[22px] [text-wrap:balance]">
-                Your website, answering customers — <em className="accent-em">day and night.</em>
+                Turn website visitors into <em className="accent-em">leads in your inbox.</em>
               </h1>
             </Reveal>
             <Reveal index={2}>
               <p className="text-[17px] leading-relaxed text-ink2 max-w-[50ch] mb-[26px] [text-wrap:pretty]">
-                An assistant trained on your business&rsquo;s own content — set up for you, by a
-                person. It answers politely, shows its source, and takes a message when it
-                doesn&rsquo;t know.
+                An AI agent trained on your business&rsquo;s own content — set up for you, by a
+                person. It answers visitors&rsquo; questions, and the moment someone asks about
+                pricing, availability, or booking, it captures their name and contact details and
+                emails them to you immediately.
               </p>
             </Reveal>
             <Reveal index={3}>
@@ -46,8 +47,8 @@ export default function Home() {
             </Reveal>
             <Reveal index={4}>
               <div className="kicker max-w-[44ch]">
-                It only answers from content you&rsquo;ve approved — and it tells you what it
-                couldn&rsquo;t answer.
+                One converted enquiry is often worth many times the monthly fee — it can pay for
+                itself before the invoice even matters.
               </div>
             </Reveal>
           </div>

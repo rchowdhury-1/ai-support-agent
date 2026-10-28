@@ -10,6 +10,7 @@ import { withTenant } from '../db/tenant.js';
 import { embedQuery } from '../services/embeddings.js';
 import { generateAnswer, type GenerationResult } from '../services/generation.js';
 import { retrieveChunks } from '../services/retrieval.js';
+import { captureLeadIfPresent } from './chat-enquiries.js';
 import {
   assertOrigin,
   buildCitations,
@@ -90,6 +91,7 @@ export async function messageHandler(req: Request, res: Response): Promise<void>
         chunks,
         history,
         question: content,
+        qualificationOffered: ctx.qualificationOffered,
         onDelta: sse ? (text) => sse!('delta', { text }) : undefined,
       });
     } catch (err) {
@@ -121,6 +123,7 @@ export async function messageHandler(req: Request, res: Response): Promise<void>
       result,
       messageId,
     });
+    await captureLeadIfPresent({ tenantId, agent, conversationId: ctx.id, result });
 
     const meta = {
       messageId,

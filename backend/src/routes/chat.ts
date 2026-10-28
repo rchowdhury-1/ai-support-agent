@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { withSystem, withTenant } from '../db/tenant.js';
 import { asyncHandler } from '../lib/http.js';
 import { messageHandler } from './chat-message.js';
+import { createEnquiry } from './chat-enquiries.js';
 import { assertOrigin, loadAgent, resolveSession } from './chat-support.js';
 
 const router = Router();
@@ -190,26 +191,30 @@ router.post(
     }
     if (!assertOrigin(req, res, agent)) return;
 
-    await withTenant(agent.tenant_id, async (db) => {
-      let conversationId: string | null = null;
-      if (p.sessionId) {
-        const { rows } = await db.query(
-          `SELECT id FROM conversations WHERE session_id = $1 AND agent_id = $2`,
-          [p.sessionId, agent.id]
-        );
-        conversationId = rows[0]?.id ?? null;
-        if (conversationId) {
-          await db.query(`UPDATE conversations SET status = 'escalated', visitor_name = $2 WHERE id = $1`, [
-            conversationId,
-            p.name,
-          ]);
-        }
-      }
-      await db.query(
-        `INSERT INTO enquiries (tenant_id, agent_id, conversation_id, name, contact, question, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [agent.tenant_id, agent.id, conversationId, p.name, p.contact, p.message, p.source]
+    const conversationId = await withTenant(agent.tenant_id, async (db) => {
+      if (!p.sessionId) return null;
+      const { rows } = await db.query(
+        `SELECT id FROM conversations WHERE session_id = $1 AND agent_id = $2`,
+        [p.sessionId, agent.id]
       );
+      const id = rows[0]?.id ?? null;
+      if (id) {
+        await db.query(`UPDATE conversations SET status = 'escalated', visitor_name = $2 WHERE id = $1`, [
+          id,
+          p.name,
+        ]);
+      }
+      return id;
+    });
+
+    await createEnquiry({
+      tenantId: agent.tenant_id,
+      agent,
+      conversationId,
+      name: p.name,
+      contact: p.contact,
+      question: p.message,
+      source: p.source,
     });
     res.json({ ok: true });
   })

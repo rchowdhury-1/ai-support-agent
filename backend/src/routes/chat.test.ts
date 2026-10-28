@@ -33,6 +33,8 @@ function answered(over: Partial<Awaited<ReturnType<typeof generateAnswer>>> = {}
     answer: 'Self-assessment costs £180 including VAT.',
     status: 'answered' as const,
     questionType: 'pricing',
+    enquiryIntent: 'none' as const,
+    leadCapture: null,
     citations: [1],
     tokensIn: 900,
     tokensOut: 60,

@@ -274,6 +274,8 @@ describe('operator dashboard', () => {
       answer: 'We onboard new clients within one week.',
       status: 'answered',
       questionType: 'onboarding',
+      enquiryIntent: 'none',
+      leadCapture: null,
       citations: [1],
       tokensIn: 500,
       tokensOut: 40,
